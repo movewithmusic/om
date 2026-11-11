@@ -27,6 +27,34 @@ const score = s => { const x = st(s.id); return x.views + (x.like + x.love + x.b
 const driveId = url => (url.match(/\/d\/([\w-]{20,})/) || url.match(/[?&]id=([\w-]{20,})/) || [])[1];
 const imgSrc = url => { const id = driveId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url };
 const ytId = url => (url.match(/(?:youtu\.be\/|v=|\/embed\/|\/live\/|\/shorts\/)([\w-]{11})/) || [])[1];
+// 檔案類型：依上傳時記下的 mime、檔名或網址判斷
+function fileKind(o) {
+  const t = `${o.mime || ""} ${o.url || ""} ${o.file || ""}`.toLowerCase();
+  if (/docs\.google\.com\/presentation|presentation|powerpoint|\.pptx?\b/.test(t)) return { tag: "PPT", label: "簡報", cls: "k-ppt", thumb: true };
+  if (/application\/pdf|\.pdf\b/.test(t)) return { tag: "PDF", label: "PDF 檔", cls: "k-pdf", thumb: true };
+  if (/^image\/|\.(jpe?g|png|gif|webp|heic)\b/.test(t)) return { tag: "圖", label: "圖片", cls: "k-img", thumb: true };
+  if (/docs\.google\.com\/document|wordprocessing|msword|\.docx?\b/.test(t)) return { tag: "DOC", label: "Word 文件", cls: "k-doc", thumb: true };
+  if (/docs\.google\.com\/spreadsheets|spreadsheet|excel|\.xlsx?\b/.test(t)) return { tag: "XLS", label: "試算表", cls: "k-xls", thumb: true };
+  if (/^audio\/|\.(mp3|m4a|wav)\b/.test(t)) return { tag: "♪", label: "錄音", cls: "k-av", thumb: false };
+  if (/^video\/|\.(mp4|mov)\b/.test(t)) return { tag: "▶", label: "影片檔", cls: "k-av", thumb: true };
+  if (/notebooklm/.test(t)) return { tag: "AI", label: "NotebookLM 筆記", cls: "k-ai", thumb: false };
+  if (driveId(o.url || "")) return { tag: "檔", label: "Drive 檔案", cls: "k-doc", thumb: true };
+  return { tag: "↗", label: "網頁連結", cls: "k-link", thumb: false };
+}
+const docThumb = o => { const id = driveId(o.url || ""); return id && fileKind(o).thumb ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : "" };
+function docCard(o) {
+  const k = fileKind(o), th = docThumb(o);
+  return `<a class="doc" href="${esc(o.url)}" target="_blank" rel="noopener">
+    <span class="dthumb ${k.cls}">${th ? `<img src="${esc(th)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="ic">${k.tag}</span></span>
+    <span class="dtext"><span class="kind ${k.cls}">${k.label}</span><span class="dname">${esc(o.name)}</span></span></a>`;
+}
+// 手機上直接開 YouTube App；電腦上開 YouTube 網站
+function ytAppLink(url, vid) {
+  const ua = navigator.userAgent;
+  if (vid && /Android/i.test(ua)) return `intent://www.youtube.com/watch?v=${vid}#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  if (vid && /iPhone|iPad|iPod/i.test(ua)) return `youtube://www.youtube.com/watch?v=${vid}`;
+  return url;
+}
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
 // ---------- data ----------
@@ -124,10 +152,10 @@ function renderDetail(id) {
   <button class="btn ghost back" id="back">← 回到列表</button>
   <div class="dhead"><div class="meta"><span class="chip ${s.cat}">${CATS[s.cat]}</span><span>${d.y} 年 ${d.m} 月 ${d.d} 日（週${d.w}）</span><span>👁 ${x.views} 次點閱</span></div>
   <h1>${esc(s.title)}</h1></div>
-  ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${vid ? `<div class="yt"><iframe src="https://www.youtube-nocookie.com/embed/${vid}" title="${esc(s.title)}" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe></div><a class="video" href="${esc(s.yt)}" target="_blank" rel="noopener"><span class="play"></span><span><b>到 YouTube 觀看</b><small>畫面較大，也可以調整字幕</small></span></a>` : `<a class="video" href="${esc(s.yt)}" target="_blank" rel="noopener"><span class="play"></span><span><b>到 YouTube 觀看完整錄影</b><small>${esc(s.yt)}</small></span></a>`}</section>` : ""}
+  ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${vid ? `<div class="yt"><iframe src="https://www.youtube.com/embed/${vid}?playsinline=1&rel=0" title="${esc(s.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="yt-hint">按上面影片中間的 ▶ 就能在這裡直接播放</p>` : ""}<a class="video" id="ytApp" href="${esc(ytAppLink(s.yt, vid))}" ${/^(intent|youtube):/.test(ytAppLink(s.yt, vid)) ? "" : `target="_blank" rel="noopener"`}><span class="play"></span><span><b>用 YouTube App 觀看</b><small>畫面較大，可以調整字幕和速度</small></span></a></section>` : ""}
   ${s.photos.length ? `<section><h2 class="sec">摘要圖</h2><div class="photos">${s.photos.map(p => `<a href="${esc(p)}" target="_blank" rel="noopener"><img src="${esc(imgSrc(p))}" alt="${esc(s.title)} 摘要圖" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}</div></section>` : ""}
   ${s.summary ? `<section><h2 class="sec">摘要</h2><div class="summary">${esc(s.summary)}</div></section>` : ""}
-  ${s.docs.length ? `<section><h2 class="sec">文檔資料</h2><div class="docs">${s.docs.map(o => `<a class="doc" href="${esc(o.url)}" target="_blank" rel="noopener"><span class="ic">${/pdf/i.test(o.url + o.name) ? "PDF" : "DOC"}</span><span>${esc(o.name)}</span></a>`).join("")}</div></section>` : ""}
+  ${s.docs.length ? `<section><h2 class="sec">文檔資料</h2><div class="docs">${s.docs.map(docCard).join("")}</div></section>` : ""}
   <section><h2 class="sec">聽完的心情 <span>點一下回饋給老師與同學</span></h2>
     <div class="react">${REACTS.map(r => `<button class="rbtn" data-r="${r.k}" aria-pressed="${mine === r.k}"><span class="e">${r.e}</span>${r.n}<small>${x[r.k] || 0}</small></button>`).join("")}</div></section>
   <section class="row"><button class="btn" id="share">分享這堂課</button>${state.admin ? `<button class="btn" id="edit">編輯這堂課</button>` : ""}</section>`;
@@ -218,7 +246,7 @@ async function appFolder() {
 async function uploadToDrive(file, onProgress) {
   const folder = await appFolder();
   const meta = { name: file.name, parents: [folder] };
-  const start = await gapi("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink", {
+  const start = await gapi("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,webViewLink", {
     method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": file.type || "application/octet-stream" },
     body: JSON.stringify(meta),
   });
@@ -230,7 +258,7 @@ async function uploadToDrive(file, onProgress) {
   await gapi(`https://www.googleapis.com/drive/v3/files/${f.id}/permissions`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "reader", type: "anyone" }),
   });
-  return { id: f.id, name: f.name, url: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view` };
+  return { id: f.id, name: f.name, mime: f.mimeType || file.type, url: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view` };
 }
 async function readPdfTitle(file) {
   try {
@@ -274,8 +302,21 @@ function renderEdit(id) {
   </div>`;
   const setTitle = (t, k) => { if (!t) return; $("#f-title").value = t.trim(); f.titleSrc = k; $("#srcHint").textContent = SRC[k]; $("#f-ok").checked = false };
   $("#f-title").oninput = () => { f.titleSrc = "manual"; $("#srcHint").textContent = SRC.manual };
-  const drawThumbs = () => { $("#thumbs").innerHTML = f.photos.map((p, i) => `<figure><img src="${esc(imgSrc(p))}" alt="摘要圖 ${i + 1}" referrerpolicy="no-referrer"><button data-rm="${i}" aria-label="移除">✕</button></figure>`).join(""); document.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { f.photos.splice(+b.dataset.rm, 1); drawThumbs() }) };
-  const drawDocs = () => { $("#docs").innerHTML = f.docs.map((o, i) => `<div class="doc"><span class="ic">DOC</span><span style="flex:1">${esc(o.name)}<br><small style="color:var(--muted)">${esc(o.url)}</small></span><button class="btn ghost" data-rd="${i}">移除</button></div>`).join(""); document.querySelectorAll("[data-rd]").forEach(b => b.onclick = () => { f.docs.splice(+b.dataset.rd, 1); drawDocs() }) };
+  const move = (arr, i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]] };
+  const drawThumbs = () => {
+    $("#thumbs").innerHTML = f.photos.map((p, i) => `<div class="arrange"><img class="athumb" src="${esc(imgSrc(p))}" alt="摘要圖 ${i + 1}" referrerpolicy="no-referrer"><span class="aname">第 ${i + 1} 張</span>
+      <span class="abtns"><button type="button" class="btn" data-pm="${i},-1" ${i ? "" : "disabled"} aria-label="往上">↑</button><button type="button" class="btn" data-pm="${i},1" ${i < f.photos.length - 1 ? "" : "disabled"} aria-label="往下">↓</button><button type="button" class="btn danger" data-rm="${i}">移除</button></span></div>`).join("");
+    document.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { f.photos.splice(+b.dataset.rm, 1); drawThumbs() });
+    document.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.pm.split(",").map(Number); move(f.photos, i, d); drawThumbs() });
+  };
+  const drawDocs = () => {
+    $("#docs").innerHTML = f.docs.map((o, i) => { const k = fileKind(o), th = docThumb(o); return `<div class="arrange"><span class="dthumb ${k.cls} small">${th ? `<img src="${esc(th)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="ic">${k.tag}</span></span>
+      <span class="aname"><span class="kind ${k.cls}">${k.label}</span><input type="text" value="${esc(o.name)}" data-dn="${i}" aria-label="文檔名稱"></span>
+      <span class="abtns"><button type="button" class="btn" data-dm="${i},-1" ${i ? "" : "disabled"} aria-label="往上">↑</button><button type="button" class="btn" data-dm="${i},1" ${i < f.docs.length - 1 ? "" : "disabled"} aria-label="往下">↓</button><button type="button" class="btn danger" data-rd="${i}">移除</button></span></div>` }).join("");
+    document.querySelectorAll("[data-rd]").forEach(b => b.onclick = () => { f.docs.splice(+b.dataset.rd, 1); drawDocs() });
+    document.querySelectorAll("[data-dm]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.dm.split(",").map(Number); move(f.docs, i, d); drawDocs() });
+    document.querySelectorAll("[data-dn]").forEach(inp => inp.oninput = () => { f.docs[+inp.dataset.dn].name = inp.value });
+  };
   drawThumbs(); drawDocs();
   $("#back").onclick = () => { location.hash = "admin" };
   $("#fetchYt").onclick = async () => {
@@ -301,7 +342,7 @@ function renderEdit(id) {
         const t = await readPdfTitle(file); name = t;
         if (!$("#f-title").value.trim()) setTitle(t, "pdf");
       }
-      try { const r = await uploadToDrive(file); f.docs.push({ name, url: r.url }); drawDocs() } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
+      try { const r = await uploadToDrive(file); f.docs.push({ name, url: r.url, mime: r.mime || file.type, file: file.name }); drawDocs() } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
     }
     busy("");
   };
@@ -313,6 +354,14 @@ function renderEdit(id) {
     const { id: sid, ...data } = f;
     data.updatedBy = state.user.email; data.updatedAt = serverTimestamp(); if (isNew) data.createdBy = state.user.email;
     $("#saveBtn").disabled = true;
+    // 舊資料補上檔案類型（需要已連上 Google Drive）
+    if (state.drive && Date.now() - state.drive.at < 50 * 60 * 1000) {
+      for (const o of f.docs) {
+        const id = driveId(o.url || ""); if (o.mime || !id) continue;
+        try { const r = await gapi(`https://www.googleapis.com/drive/v3/files/${id}?fields=mimeType,name`); const j = await r.json(); o.mime = j.mimeType; o.file = j.name } catch { }
+      }
+      data.docs = f.docs;
+    }
     try {
       await setDoc(doc(db, "sessions", sid), data, { merge: true });
       const i = state.sessions.findIndex(s => s.id === sid); const rec = { ...f };
