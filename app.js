@@ -26,6 +26,7 @@ const st = id => state.stats[id] || { views: 0, like: 0, love: 0, bow: 0 };
 const score = s => { const x = st(s.id); return x.views + (x.like + x.love + x.bow) * 2 };
 const driveId = url => (url.match(/\/d\/([\w-]{20,})/) || url.match(/[?&]id=([\w-]{20,})/) || [])[1];
 const imgSrc = url => { const id = driveId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url };
+const ytList = url => (url.match(/[?&]list=([\w-]+)/) || [])[1];
 const ytId = url => (url.match(/(?:youtu\.be\/|v=|\/embed\/|\/live\/|\/shorts\/)([\w-]{11})/) || [])[1];
 // 檔案類型：依上傳時記下的 mime、檔名或網址判斷
 function fileKind(o) {
@@ -50,10 +51,17 @@ function docCard(o) {
 }
 // 手機上直接開 YouTube App；電腦上開 YouTube 網站
 function ytAppLink(url, vid) {
-  const ua = navigator.userAgent;
-  if (vid && /Android/i.test(ua)) return `intent://www.youtube.com/watch?v=${vid}#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(url)};end`;
-  if (vid && /iPhone|iPad|iPod/i.test(ua)) return `youtube://www.youtube.com/watch?v=${vid}`;
+  const ua = navigator.userAgent, list = ytList(url);
+  const path = vid ? `watch?v=${vid}${list ? `&list=${list}` : ""}` : list ? `playlist?list=${list}` : "";
+  if (path && /Android/i.test(ua)) return `intent://www.youtube.com/${path}#Intent;package=com.google.android.youtube;scheme=https;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  if (path && /iPhone|iPad|iPod/i.test(ua)) return `youtube://www.youtube.com/${path}`;
   return url;
+}
+function ytEmbed(url) {
+  const vid = ytId(url), list = ytList(url);
+  if (vid) return `https://www.youtube.com/embed/${vid}?playsinline=1&rel=0${list ? `&list=${list}` : ""}`;
+  if (list) return `https://www.youtube.com/embed/videoseries?list=${list}&playsinline=1&rel=0`;
+  return "";
 }
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
@@ -152,7 +160,7 @@ function renderDetail(id) {
   <button class="btn ghost back" id="back">← 回到列表</button>
   <div class="dhead"><div class="meta"><span class="chip ${s.cat}">${CATS[s.cat]}</span><span>${d.y} 年 ${d.m} 月 ${d.d} 日（週${d.w}）</span><span>👁 ${x.views} 次點閱</span></div>
   <h1>${esc(s.title)}</h1></div>
-  ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${vid ? `<div class="yt"><iframe src="https://www.youtube.com/embed/${vid}?playsinline=1&rel=0" title="${esc(s.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="yt-hint">按上面影片中間的 ▶ 就能在這裡直接播放</p>` : ""}<a class="video" id="ytApp" href="${esc(ytAppLink(s.yt, vid))}" ${/^(intent|youtube):/.test(ytAppLink(s.yt, vid)) ? "" : `target="_blank" rel="noopener"`}><span class="play"></span><span><b>用 YouTube App 觀看</b><small>畫面較大，可以調整字幕和速度</small></span></a></section>` : ""}
+  ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${ytEmbed(s.yt) ? `<div class="yt"><iframe src="${esc(ytEmbed(s.yt))}" title="${esc(s.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="yt-hint">按上面影片中間的 ▶ 就能在這裡直接播放${!ytId(s.yt) && ytList(s.yt) ? "（這是播放清單，會從第一部開始）" : ""}</p>` : ""}<a class="video" id="ytApp" href="${esc(ytAppLink(s.yt, vid))}" ${/^(intent|youtube):/.test(ytAppLink(s.yt, vid)) ? "" : `target="_blank" rel="noopener"`}><span class="play"></span><span><b>用 YouTube App 觀看</b><small>畫面較大，可以調整字幕和速度</small></span></a></section>` : ""}
   ${s.photos.length ? `<section><h2 class="sec">摘要圖</h2><div class="photos">${s.photos.map(p => `<a href="${esc(p)}" target="_blank" rel="noopener"><img src="${esc(imgSrc(p))}" alt="${esc(s.title)} 摘要圖" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}</div></section>` : ""}
   ${s.summary ? `<section><h2 class="sec">摘要</h2><div class="summary">${esc(s.summary)}</div></section>` : ""}
   ${s.docs.length ? `<section><h2 class="sec">文檔資料</h2><div class="docs">${s.docs.map(docCard).join("")}</div></section>` : ""}
