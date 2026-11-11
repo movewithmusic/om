@@ -119,7 +119,7 @@ function card(s) {
   return `<button class="card" data-id="${s.id}"><div class="date"><div class="m">${d.m} 月</div><div class="d">${d.d}</div><div class="m">週${d.w}</div></div>
   <div class="body"><div class="meta"><span class="chip ${s.cat}">${CAT_SHORT[s.cat]}</span>${s.confirmed ? "" : `<span class="chip pending">待確認</span>`}</div>
   <div class="t">${esc(s.title)}</div>
-  <div class="meta"><span class="has">${s.yt ? "<i>影片</i>" : ""}${s.photos.length ? `<i>摘要圖 ${s.photos.length}</i>` : ""}${s.docs.length ? `<i>文檔 ${s.docs.length}</i>` : ""}</span><span>👁 ${x.views}</span><span>${REACTS.map(r => r.e + " " + (x[r.k] || 0)).join("　")}</span></div></div></button>`;
+  <div class="meta"><span class="has">${s.yt ? `<i class="h-yt">▶ 影片</i>` : ""}${s.photos.length ? `<i class="h-img">摘要圖 ${s.photos.length}</i>` : ""}${s.docs.length ? `<i class="h-doc">文檔 ${s.docs.length}</i>` : ""}</span><span>👁 ${x.views}</span><span>${REACTS.map(r => r.e + " " + (x[r.k] || 0)).join("　")}</span></div></div></button>`;
 }
 function openSession(id) {
   if (!state.admin) { const seen = local.get("gx.seen", {}); if (!seen[id]) { seen[id] = 1; local.set("gx.seen", seen); bump(id, { views: 1 }) } }
@@ -133,7 +133,7 @@ function renderDetail(id) {
   <button class="btn ghost back" id="back">← 回到列表</button>
   <div class="dhead"><div class="meta"><span class="chip ${s.cat}">${CATS[s.cat]}</span><span>${d.y} 年 ${d.m} 月 ${d.d} 日（週${d.w}）</span><span>👁 ${x.views} 次點閱</span></div>
   <h1>${esc(s.title)}</h1></div>
-  ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${vid ? `<div class="yt"><iframe src="https://www.youtube-nocookie.com/embed/${vid}" title="${esc(s.title)}" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe></div>` : `<a class="video" href="${esc(s.yt)}" target="_blank" rel="noopener"><span class="play"></span><span><b>到 YouTube 觀看完整錄影</b><small>${esc(s.yt)}</small></span></a>`}</section>` : ""}
+  ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${vid ? `<div class="yt"><iframe src="https://www.youtube-nocookie.com/embed/${vid}" title="${esc(s.title)}" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe></div><a class="video" href="${esc(s.yt)}" target="_blank" rel="noopener"><span class="play"></span><span><b>到 YouTube 觀看</b><small>畫面較大，也可以調整字幕</small></span></a>` : `<a class="video" href="${esc(s.yt)}" target="_blank" rel="noopener"><span class="play"></span><span><b>到 YouTube 觀看完整錄影</b><small>${esc(s.yt)}</small></span></a>`}</section>` : ""}
   ${s.photos.length ? `<section><h2 class="sec">摘要圖</h2><div class="photos">${s.photos.map(p => `<a href="${esc(p)}" target="_blank" rel="noopener"><img src="${esc(imgSrc(p))}" alt="${esc(s.title)} 摘要圖" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}</div></section>` : ""}
   ${s.summary ? `<section><h2 class="sec">摘要</h2><div class="summary">${esc(s.summary)}</div></section>` : ""}
   ${s.docs.length ? `<section><h2 class="sec">文檔資料</h2><div class="docs">${s.docs.map(o => `<a class="doc" href="${esc(o.url)}" target="_blank" rel="noopener"><span class="ic">${/pdf/i.test(o.url + o.name) ? "PDF" : "DOC"}</span><span>${esc(o.name)}</span></a>`).join("")}</div></section>` : ""}

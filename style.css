@@ -3,19 +3,19 @@
   --bg:#F6F0E4; --surface:#FFFCF6; --ink:#3B2E22; --muted:#5E4F3F; --line:#E6DAC6;
   --accent:#5F7A4C; --accent-soft:#E7EDDC; --gold:#A8772E; --gold-soft:#F3E6CC;
   --c-mon:#5F7A4C; --c-mon-bg:#E7EDDC; --c-cc:#9A6A2C; --c-cc-bg:#F3E6CC; --c-nk:#4E7470; --c-nk-bg:#DFEAE7;
-  --danger:#A63A2E; --shadow:0 1px 2px rgba(59,46,34,.06),0 6px 18px rgba(59,46,34,.08);
+  --yt:#C4302B; --danger:#A63A2E; --shadow:0 1px 2px rgba(59,46,34,.06),0 6px 18px rgba(59,46,34,.08);
   --f-display:"Noto Serif TC","Songti TC",serif; --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#1C1813; --surface:#26201A; --ink:#EFE6D6; --muted:#CDBFA9; --line:#3A3127;
   --accent:#A7C08F; --accent-soft:#2E3626; --gold:#D9A955; --gold-soft:#3A2E1B;
   --c-mon:#A7C08F; --c-mon-bg:#2E3626; --c-cc:#D9A955; --c-cc-bg:#3A2E1B; --c-nk:#8FC0B9; --c-nk-bg:#22322F;
-  --danger:#E57C6E; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
+  --yt:#E8645E; --danger:#E57C6E; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#1C1813; --surface:#26201A; --ink:#EFE6D6; --muted:#CDBFA9; --line:#3A3127;
   --accent:#A7C08F; --accent-soft:#2E3626; --gold:#D9A955; --gold-soft:#3A2E1B;
   --c-mon:#A7C08F; --c-mon-bg:#2E3626; --c-cc:#D9A955; --c-cc-bg:#3A2E1B; --c-nk:#8FC0B9; --c-nk-bg:#22322F;
-  --danger:#E57C6E; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}
+  --yt:#E8645E; --danger:#E57C6E; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
@@ -147,3 +147,20 @@ input[type=text],input[type=url],input[type=date],input[type=password],select,te
 .gtitle small{font-size:15px;color:var(--muted);font-weight:400}
 .btn.more{align-self:flex-start;color:var(--accent);border-color:var(--accent)}
 #topics{scroll-margin-top:90px}
+
+/* 影片、文檔標記與按鈕：更大更鮮明 */
+.has{gap:8px;flex-wrap:wrap}
+.has i{font-size:16px;font-weight:700;padding:3px 12px;border-radius:999px;border:0;color:var(--surface)}
+.has i.h-yt{background:var(--yt)}
+.has i.h-doc{background:var(--accent)}
+.has i.h-img{background:var(--gold)}
+.video{background:var(--yt);color:#fff;aspect-ratio:auto;padding:22px 24px;border-radius:14px;box-shadow:var(--shadow)}
+.video .play{background:#fff}
+.video .play::after{border-left-color:var(--yt)}
+.video b{font-size:22px}
+.video small{font-size:14px}
+a.doc{border:2px solid var(--accent);background:var(--surface);font-size:20px;font-weight:700;color:var(--accent);padding:18px 20px;box-shadow:var(--shadow)}
+a.doc:hover{background:var(--accent-soft)}
+.doc .ic{background:var(--accent);color:var(--surface);width:46px;height:52px;font-size:14px}
+a.doc::after{content:"開啟 ›";margin-left:auto;font-size:17px;white-space:nowrap}
+.yt + .video{margin-top:12px}
