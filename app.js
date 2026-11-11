@@ -341,7 +341,11 @@ function renderEdit(id) {
   const src = isNew ? { id: doc(collection(db, "sessions")).id, date: today(), cat: "mon", title: "", titleSrc: "", confirmed: false, yt: "", photos: [], docs: [], videos: [], summary: "" } : state.sessions.find(s => s.id === id);
   if (!src) { location.hash = "admin"; return }
   const f = JSON.parse(JSON.stringify(src)); f.videos ||= [];
-  const SRC = { youtube: "來自 YouTube 標題，請確認", pdf: "來自 PDF 檔，請確認", manual: "手動輸入" };
+  const SRC = { youtube: "來自 YouTube 標題，請確認", pdf: "來自 PDF 檔，請確認", text: "來自文字內容，請確認", file: "來自檔案名稱，請確認", auto: "系統自動產生，請確認", manual: "手動輸入" };
+  // 從文字內容抓第一句、從檔名整理出標題
+  const fromText = t => { const line = (t || "").split(/\n/).map(x => x.replace(/^[\s#*>•·\-–—=\d.、)）]+/, "").trim()).find(x => x.length >= 2) || ""; const first = line.split(/[。！？!?]/)[0].trim(); return (first.length >= 4 ? first : line).slice(0, 36) };
+  const fromName = n => (n || "").replace(/\.[^.]{2,5}$/, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+  const fillTitle = (t, k) => { if (!$("#f-title").value.trim() && t) setTitle(t, k) };
   $("#app").innerHTML = `
   <button class="btn ghost back" id="back">← 回到後台</button>
   <div class="panel">
@@ -352,7 +356,7 @@ function renderEdit(id) {
     </div>
     <p class="hint">每一堂課可以只有影片、只有照片、或只有文字，有什麼放什麼就好。</p>
     <div class="field"><label for="f-yt">YouTube 連結（沒有可留空）</label><div class="row"><input type="url" id="f-yt" value="${esc(f.yt)}" placeholder="https://youtu.be/…"><button class="btn" id="fetchYt">抓取標題</button></div></div>
-    <div class="field"><label for="f-title">標題</label><input type="text" id="f-title" value="${esc(f.title)}" placeholder="可由系統抓取，再手動修改"><span class="src" id="srcHint">${f.titleSrc ? SRC[f.titleSrc] : ""}</span></div>
+    <div class="field"><label for="f-title">標題</label><input type="text" id="f-title" value="${esc(f.title)}" placeholder="可留空，系統會從影片、檔案或文字自動抓取"><span class="src" id="srcHint">${f.titleSrc ? SRC[f.titleSrc] : ""}</span></div>
     <div class="field"><label for="up-vid">其他影片或錄音（不是 YouTube 的）</label>
       <input type="file" id="up-vid" accept="video/*,audio/*" multiple>
       <span class="hint">選好影片或錄音檔就會上傳到你的 Google Drive 並設成公開。檔案大的話要等比較久，上傳時請不要關掉畫面。</span>
@@ -428,7 +432,7 @@ function renderEdit(id) {
       if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
         const t = await readPdfTitle(file); name = t;
         if (!$("#f-title").value.trim()) setTitle(t, "pdf");
-      }
+      } else fillTitle(fromName(file.name), "file");
       try { const r = await uploadToDrive(file); f.docs.push({ name, url: r.url, mime: r.mime || file.type, file: file.name }); drawDocs() } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
     }
     busy("");
@@ -437,16 +441,22 @@ function renderEdit(id) {
     const files = [...e.target.files]; e.target.value = "";
     for (const [i, file] of files.entries()) {
       busy(`上傳影片 ${i + 1}/${files.length}：${file.name}（${Math.round(file.size / 1048576)} MB），請稍候…`);
-      try { const r = await uploadToDrive(file); f.videos.push({ name: file.name.replace(/\.[^.]+$/, ""), url: r.url, mime: r.mime || file.type }); drawVids() } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
+      try { const r = await uploadToDrive(file); f.videos.push({ name: file.name.replace(/\.[^.]+$/, ""), url: r.url, mime: r.mime || file.type }); drawVids(); fillTitle(fromName(file.name), "file") } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
     }
     busy("");
   };
-  $("#addVid").onclick = () => { const n = $("#v-name").value.trim(), u = $("#v-url").value.trim(); if (!u) return toast("請貼上影片連結"); f.videos.push({ name: n, url: u }); $("#v-name").value = ""; $("#v-url").value = ""; drawVids() };
+  $("#addVid").onclick = () => { const n = $("#v-name").value.trim(), u = $("#v-url").value.trim(); if (!u) return toast("請貼上影片連結"); f.videos.push({ name: n, url: u }); if (n) fillTitle(n, "file"); $("#v-name").value = ""; $("#v-url").value = ""; drawVids() };
+  $("#f-sum").onchange = () => fillTitle(fromText($("#f-sum").value), "text");
   $("#addPhoto").onclick = () => { const u = $("#p-url").value.trim(); if (!u) return toast("請貼上圖片連結"); f.photos.push(u); $("#p-url").value = ""; drawThumbs() };
-  $("#addDoc").onclick = () => { const n = $("#d-name").value.trim(), u = $("#d-url").value.trim(); if (!u) return toast("請貼上文檔連結"); f.docs.push({ name: n || u, url: u }); $("#d-name").value = ""; $("#d-url").value = ""; drawDocs() };
+  $("#addDoc").onclick = () => { const n = $("#d-name").value.trim(), u = $("#d-url").value.trim(); if (!u) return toast("請貼上文檔連結"); f.docs.push({ name: n || u, url: u }); if (n) fillTitle(n, "file"); $("#d-name").value = ""; $("#d-url").value = ""; drawDocs() };
   $("#saveBtn").onclick = async () => {
     f.date = $("#f-date").value; f.cat = $("#f-cat").value; f.yt = $("#f-yt").value.trim(); f.title = $("#f-title").value.trim(); f.summary = $("#f-sum").value; f.confirmed = $("#f-ok").checked;
-    if (!f.date || !f.title) return toast("日期和標題要填");
+    if (!f.title) {
+      const d = f.date ? fmtDate(f.date) : null;
+      f.title = fromText(f.summary) || fromName(f.docs[0]?.name) || fromName(f.videos[0]?.name) || (d ? `${CAT_SHORT[f.cat]}・${d.m} 月 ${d.d} 日` : "");
+      f.titleSrc = "auto"; $("#f-title").value = f.title; $("#srcHint").textContent = SRC.auto;
+    }
+    if (!f.date || !f.title) return toast("請填日期");
     if (f.yt && !isYt(f.yt)) { f.videos.unshift({ name: "", url: f.yt }); f.yt = ""; $("#f-yt").value = ""; drawVids() }
     const { id: sid, ...data } = f;
     data.updatedBy = state.user.email; data.updatedAt = serverTimestamp(); if (isNew) data.createdBy = state.user.email;
