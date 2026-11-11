@@ -1,6 +1,6 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc, query, where, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, reauthenticateWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+import { getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc, query, where, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./config.js";
 
 const fb = initializeApp(firebaseConfig);
@@ -331,6 +331,47 @@ async function uploadToDrive(file, onProgress) {
   });
   return { id: f.id, name: f.name, mime: f.mimeType || file.type, url: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view` };
 }
+// ---------- AI 標題建議（Firebase AI Logic + Gemini）----------
+const AI_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"];
+const toB64 = blob => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(blob) });
+async function driveBlob(url) {
+  const id = driveId(url || ""); if (!id || !hasDrive()) return null;
+  try { const r = await gapi(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`); return await r.blob() } catch { return null }
+}
+async function aiTitles(f, localFiles) {
+  const ctx = [`主題分類：${CATS[f.cat]}`, f.date ? `日期：${f.date}` : "",
+    f.summary?.trim() ? `文字內容：\n${f.summary.trim().slice(0, 4000)}` : "",
+    f.docs.length ? `文件名稱：${f.docs.map(d => d.name).join("、")}` : "",
+    f.videos?.length ? `影片名稱：${f.videos.map(v => v.name).filter(Boolean).join("、")}` : ""].filter(Boolean).join("\n");
+  const media = [];
+  const add = async (url, kind, max) => {
+    const fl = localFiles.get(url); let b = fl || await driveBlob(url); if (!b) return;
+    const mime = (fl?.type || b.type || "").split(";")[0];
+    if (kind === "img" && !/^image\//.test(mime)) return;
+    if (kind === "pdf" && mime !== "application/pdf") return;
+    if (b.size > max) return;
+    media.push({ inlineData: { mimeType: mime, data: await toB64(b) } });
+  };
+  for (const u of f.photos.slice(0, 4)) await add(u, "img", 7e6);
+  for (const d of f.docs.filter(d => /pdf/i.test(d.mime || d.file || d.name || "")).slice(0, 2)) await add(d.url, "pdf", 15e6);
+  if (!media.length && !f.summary?.trim() && !f.docs.length) throw new Error("請先上傳摘要圖、文件，或填寫文字內容");
+  const { getAI, getGenerativeModel, GoogleAIBackend, Schema } = await import("https://www.gstatic.com/firebasejs/12.12.0/firebase-ai.js");
+  const ai = getAI(fb, { backend: new GoogleAIBackend() });
+  const prompt = `你是佛學與生活講座「共學講堂」的編輯。請閱讀以下資料${media.length ? "和附上的摘要圖、文件" : ""}，為這堂課想 5 個繁體中文標題。
+規則：每個 8～20 個字；要點出這堂課最核心的主題或經典名稱；語氣溫和、清楚，長輩一看就懂；不要加日期、引號或編號；第一個是你認為最適合的。
+${ctx}`;
+  let last;
+  for (const name of AI_MODELS) {
+    try {
+      const model = getGenerativeModel(ai, { model: name, generationConfig: { responseMimeType: "application/json", responseSchema: Schema.object({ properties: { titles: Schema.array({ items: Schema.string() }) } }) } });
+      const res = await model.generateContent([prompt, ...media]);
+      const t = (JSON.parse(res.response.text()).titles || []).map(x => String(x).replace(/^["「『\s\d.、]+|["」』\s]+$/g, "").trim()).filter(Boolean);
+      if (t.length) return [...new Set(t)].slice(0, 5);
+    } catch (e) { last = e; console.warn(name, e); if (!/not.?found|404|unsupported|deprecat/i.test(String(e?.message))) break }
+  }
+  const m = String(last?.message || "");
+  throw new Error(/api.?not.?enabled|has not been used|PERMISSION_DENIED|403|firebasevertexai|firebaseml/i.test(m) ? "AI 功能還沒在 Firebase 開啟（AI Logic），請照說明開啟" : /429|quota|RESOURCE_EXHAUSTED/i.test(m) ? "AI 這段時間用量滿了，請過幾分鐘再試" : "AI 產生標題失敗，請再試一次");
+}
 async function readPdfTitle(file) {
   try {
     const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
@@ -345,7 +386,7 @@ function renderEdit(id) {
   const src = isNew ? { id: doc(collection(db, "sessions")).id, date: today(), cat: "mon", title: "", titleSrc: "", confirmed: false, yt: "", photos: [], docs: [], videos: [], summary: "" } : state.sessions.find(s => s.id === id);
   if (!src) { location.hash = "admin"; return }
   const f = JSON.parse(JSON.stringify(src)); f.videos ||= [];
-  const SRC = { youtube: "來自 YouTube 標題，請確認", pdf: "來自 PDF 檔，請確認", text: "來自文字內容，請確認", file: "來自檔案名稱，請確認", auto: "系統自動產生，請確認", manual: "手動輸入" };
+  const SRC = { youtube: "來自 YouTube 標題，請確認", pdf: "來自 PDF 檔，請確認", text: "來自文字內容，請確認", ai: "AI 建議的標題，請確認或從下方換一個", file: "來自檔案名稱，請確認", auto: "系統自動產生，請確認", manual: "手動輸入" };
   // 從文字內容抓第一句、從檔名整理出標題
   const fromText = t => { const line = (t || "").split(/\n/).map(x => x.replace(/^[\s#*>•·\-–—=\d.、)）]+/, "").trim()).find(x => x.length >= 2) || ""; const first = line.split(/[。！？!?]/)[0].trim(); return (first.length >= 4 ? first : line).slice(0, 36) };
   const fromName = n => (n || "").replace(/\.[^.]{2,5}$/, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
@@ -360,7 +401,8 @@ function renderEdit(id) {
     </div>
     <p class="hint">每一堂課可以只有影片、只有照片、或只有文字，有什麼放什麼就好。</p>
     <div class="field"><label for="f-yt">YouTube 連結（沒有可留空）</label><div class="row"><input type="url" id="f-yt" value="${esc(f.yt)}" placeholder="https://youtu.be/…"><button class="btn" id="fetchYt">抓取標題</button></div></div>
-    <div class="field"><label for="f-title">標題</label><input type="text" id="f-title" value="${esc(f.title)}" placeholder="可留空，系統會從影片、檔案或文字自動抓取"><span class="src" id="srcHint">${f.titleSrc ? SRC[f.titleSrc] : ""}</span></div>
+    <div class="field"><label for="f-title">標題</label><input type="text" id="f-title" value="${esc(f.title)}" placeholder="可留空，系統會從影片、檔案或文字自動抓取"><span class="src" id="srcHint">${f.titleSrc ? SRC[f.titleSrc] : ""}</span>
+      <div class="row"><button class="btn ai-btn" type="button" id="aiBtn">✨ 用 AI 從圖片和文件想標題</button></div><div class="aipick" id="aiPick"></div></div>
     <div class="field"><label for="up-vid">其他影片或錄音（不是 YouTube 的）</label>
       <input type="file" id="up-vid" accept="video/*,audio/*" multiple>
       <span class="hint">選好影片或錄音檔就會上傳到你的 Google Drive 並設成公開。檔案大的話要等比較久，上傳時請不要關掉畫面。</span>
@@ -429,9 +471,28 @@ function renderEdit(id) {
       catch (err) { console.error(err); toast(/popup-blocked/.test(err.code || "") ? "瀏覽器擋住了 Google 視窗，請再按一次" : "沒有完成 Google 授權，請再按一次") }
     };
   };
+  // AI 標題建議：上傳完圖片或文件後自動跑一次，也可以手動按
+  const localFiles = new Map(); let aiRunning = false;
+  const runAI = async auto => {
+    if (aiRunning) return; const box = $("#aiPick");
+    if (!auto && !hasDrive() && (f.photos.some(u => !localFiles.has(u)) || f.docs.some(d => !localFiles.has(d.url)))) { try { await driveToken() } catch { } }
+    aiRunning = true; $("#aiBtn").disabled = true; box.innerHTML = `<p class="aiwait">✨ AI 正在閱讀圖片和文件，想標題中…（約 10～30 秒）</p>`;
+    try {
+      f.summary = $("#f-sum").value; f.title = $("#f-title").value.trim();
+      const list = await aiTitles(f, localFiles);
+      const keep = !f.title || ["file", "text", "auto", "ai", "pdf"].includes(f.titleSrc);
+      if (keep) setTitle(list[0], "ai");
+      const draw = () => { box.innerHTML = `<p class="hint">AI 想到的標題（點一下就換成這個，之後也可以再手動修改）：</p>${list.map((t, i) => `<button type="button" class="aichip" data-ai="${i}" aria-pressed="${$("#f-title").value === t}">${esc(t)}</button>`).join("")}`;
+        box.querySelectorAll("[data-ai]").forEach(b => b.onclick = () => { setTitle(list[+b.dataset.ai], "ai"); draw() }) };
+      draw();
+    } catch (err) { console.error(err); box.innerHTML = auto ? "" : `<p class="aierr">${esc(err.message)}</p>`; if (!auto) toast(err.message) }
+    finally { aiRunning = false; $("#aiBtn").disabled = false }
+  };
+  $("#aiBtn").onclick = () => runAI(false);
+  const autoAI = () => { if (!localFiles.size) return; const t = $("#f-title").value.trim(); if (!t || ["file", "text", "auto", "pdf"].includes(f.titleSrc)) runAI(true) };
   const uploadAll = async (files, label, onFile) => {
     for (let i = 0; i < files.length; i++) {
-      if (!hasDrive()) { busy(""); return askDrive(() => uploadAll(files.slice(i), label, onFile)) }
+      if (!hasDrive()) { busy(""); return askDrive(() => uploadAll(files.slice(i), label, onFile).then(autoAI)) }
       busy(label(files[i], i, files.length));
       try { await onFile(files[i]) } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
     }
@@ -439,15 +500,15 @@ function renderEdit(id) {
   };
   const picked = e => { const files = [...e.target.files]; e.target.value = ""; return files };
   $("#up-img").onchange = e => uploadAll(picked(e), (f, i, n) => `上傳圖片 ${i + 1}/${n}：${f.name}…`,
-    async file => { const r = await uploadToDrive(file); f.photos.push(r.url); drawThumbs() });
+    async file => { const r = await uploadToDrive(file); localFiles.set(r.url, file); f.photos.push(r.url); drawThumbs() }).then(autoAI);
   $("#up-doc").onchange = e => uploadAll(picked(e), (f, i, n) => `上傳文檔 ${i + 1}/${n}：${f.name}…`, async file => {
     let name = file.name.replace(/\.[^.]+$/, "");
     if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
       const t = await readPdfTitle(file); name = t;
       if (!$("#f-title").value.trim()) setTitle(t, "pdf");
     } else fillTitle(fromName(file.name), "file");
-    const r = await uploadToDrive(file); f.docs.push({ name, url: r.url, mime: r.mime || file.type, file: file.name }); drawDocs();
-  });
+    const r = await uploadToDrive(file); localFiles.set(r.url, file); f.docs.push({ name, url: r.url, mime: r.mime || file.type, file: file.name }); drawDocs();
+  }).then(autoAI);
   $("#up-vid").onchange = e => uploadAll(picked(e), (f, i, n) => `上傳影片 ${i + 1}/${n}：${f.name}（${Math.round(f.size / 1048576)} MB），請稍候…`,
     async file => { const r = await uploadToDrive(file); f.videos.push({ name: file.name.replace(/\.[^.]+$/, ""), url: r.url, mime: r.mime || file.type }); drawVids(); fillTitle(fromName(file.name), "file") });
   $("#addVid").onclick = () => { const n = $("#v-name").value.trim(), u = $("#v-url").value.trim(); if (!u) return toast("請貼上影片連結"); f.videos.push({ name: n, url: u }); if (n) fillTitle(n, "file"); $("#v-name").value = ""; $("#v-url").value = ""; drawVids() };

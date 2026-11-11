@@ -240,3 +240,13 @@ body.noscroll{overflow:hidden}
 /* 摘要圖排序列：讓「移除」按鈕跟文檔一樣正常顯示 */
 .thumbs .abtns{margin-left:auto}
 .thumbs .abtns .btn{position:static;width:auto;height:auto;min-height:46px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--danger);font-size:17px;padding:10px 18px}
+/* AI 標題建議 */
+.ai-btn{margin-top:8px;background:#F3EAD6;border-color:var(--gold);color:var(--ink);font-weight:600}
+.aipick{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.aipick:empty{display:none}
+.aichip{text-align:left;font-size:18px;line-height:1.5;padding:12px 14px;min-height:46px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.aichip[aria-pressed="true"]{border:2px solid var(--accent);background:#EEF3E8;font-weight:600}
+.aichip[aria-pressed="true"]::before{content:"✓ ";color:var(--accent)}
+.aiwait{margin:0;font-size:17px;color:var(--gold)}
+.aierr{margin:0;font-size:17px;color:var(--danger)}
+@media (prefers-color-scheme: dark){.ai-btn{background:transparent}.aichip[aria-pressed="true"]{background:transparent}}
