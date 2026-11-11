@@ -1,0 +1,45 @@
+// 貼到 Firebase 主控台前，把 ADMIN_CODE 換成管理密碼（密碼只放在這裡，不會出現在網站程式碼）。
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // 管理者：輸入正確管理密碼的人，可以把自己的 Google 帳號登記成管理者
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.code == 'ADMIN_CODE'
+        && request.resource.data.keys().hasOnly(['code','email','name','createdAt','folderId']);
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['folderId','name']);
+      allow delete: if false;
+    }
+
+    function prev(f) {
+      return resource == null ? 0 : resource.data.get(f, 0);
+    }
+    function step(f) {
+      let n = request.resource.data.get(f, 0);
+      return n is int && n >= 0 && n - prev(f) <= 1 && n - prev(f) >= -1;
+    }
+
+    // 每一堂課：大家只能看已公開的，管理者可以看全部並編輯
+    match /sessions/{id} {
+      allow read: if resource.data.confirmed == true || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // 點閱與心情計數：任何人都能 +1 / -1，不能亂改
+    match /stats/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['views','like','love','bow'])
+        && step('views') && step('like') && step('love') && step('bow');
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views','like','love','bow'])
+        && step('views') && step('like') && step('love') && step('bow');
+      allow delete: if isAdmin();
+    }
+  }
+}
