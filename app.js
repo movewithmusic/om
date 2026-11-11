@@ -28,6 +28,21 @@ const driveId = url => (url.match(/\/d\/([\w-]{20,})/) || url.match(/[?&]id=([\w
 const imgSrc = url => { const id = driveId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url };
 const ytList = url => (url.match(/[?&]list=([\w-]+)/) || [])[1];
 const ytId = url => (url.match(/(?:youtu\.be\/|v=|\/embed\/|\/live\/|\/shorts\/)([\w-]{11})/) || [])[1];
+const isYt = url => !!(url && (ytId(url) || ytList(url)) && /youtu/.test(url));
+// 其他影片（Drive 影片檔、Vimeo、Facebook、mp4 連結…）：能在頁面裡播的就直接嵌入
+function videoBlock(v) {
+  const u = v.url || "", name = v.name ? `<p class="vname">${esc(v.name)}</p>` : "";
+  const frame = src => `<div class="yt"><iframe src="${esc(src)}" title="${esc(v.name || "影片")}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>`;
+  const id = driveId(u), vm = (u.match(/vimeo\.com\/(?:video\/)?(\d+)/) || [])[1];
+  let body;
+  if (/\.(mp4|m4v|webm|mov)(\?|$)/i.test(u)) body = `<video class="vfile" src="${esc(u)}" controls playsinline preload="metadata"></video>`;
+  else if (/\.(mp3|m4a|aac|wav|ogg)(\?|$)/i.test(u)) body = `<audio class="afile" src="${esc(u)}" controls preload="metadata"></audio>`;
+  else if (id && /google\.com/.test(u)) body = frame(`https://drive.google.com/file/d/${id}/preview`);
+  else if (vm) body = frame(`https://player.vimeo.com/video/${vm}`);
+  else if (/facebook\.com|fb\.watch/.test(u)) body = frame(`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(u)}&show_text=false`);
+  else body = `<a class="video" href="${esc(u)}" target="_blank" rel="noopener"><span class="play"></span><span><b>開啟影片</b><small>${esc(v.name || "點這裡觀看")}</small></span></a>`;
+  return `<div class="vitem">${name}${body}</div>`;
+}
 // 檔案類型：依上傳時記下的 mime、檔名或網址判斷
 function fileKind(o) {
   const t = `${o.mime || ""} ${o.url || ""} ${o.file || ""}`.toLowerCase();
@@ -93,7 +108,7 @@ const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000
 async function load() {
   const q = state.admin ? collection(db, "sessions") : query(collection(db, "sessions"), where("confirmed", "==", true));
   const [ss, stats] = await Promise.all([getDocs(q), getDocs(collection(db, "stats"))]);
-  state.sessions = ss.docs.map(d => ({ id: d.id, photos: [], docs: [], ...d.data() }));
+  state.sessions = ss.docs.map(d => ({ id: d.id, photos: [], docs: [], videos: [], ...d.data() }));
   state.stats = Object.fromEntries(stats.docs.map(d => [d.id, d.data()]));
   state.loaded = true;
 }
@@ -170,7 +185,7 @@ function card(s) {
   return `<button class="card" data-id="${s.id}"><div class="date"><div class="m">${d.m} 月</div><div class="d">${d.d}</div><div class="m">週${d.w}</div></div>
   <div class="body"><div class="meta"><span class="chip ${s.cat}">${CAT_SHORT[s.cat]}</span>${s.confirmed ? "" : `<span class="chip pending">待確認</span>`}</div>
   <div class="t">${esc(s.title)}</div>
-  <div class="meta"><span class="has">${s.yt ? `<i class="h-yt">▶ 影片</i>` : ""}${s.photos.length ? `<i class="h-img">摘要圖 ${s.photos.length}</i>` : ""}${s.docs.length ? `<i class="h-doc">文檔 ${s.docs.length}</i>` : ""}</span><span>👁 ${x.views}</span><span>${REACTS.map(r => r.e + " " + (x[r.k] || 0)).join("　")}</span></div></div></button>`;
+  <div class="meta"><span class="has">${s.yt || s.videos?.length ? `<i class="h-yt">▶ 影片</i>` : ""}${s.photos.length ? `<i class="h-img">摘要圖 ${s.photos.length}</i>` : ""}${s.docs.length ? `<i class="h-doc">文檔 ${s.docs.length}</i>` : ""}</span><span>👁 ${x.views}</span><span>${REACTS.map(r => r.e + " " + (x[r.k] || 0)).join("　")}</span></div></div></button>`;
 }
 function openSession(id) {
   if (!state.admin) { const seen = local.get("gx.seen", {}); if (!seen[id]) { seen[id] = 1; local.set("gx.seen", seen); bump(id, { views: 1 }) } }
@@ -179,14 +194,15 @@ function openSession(id) {
 function renderDetail(id) {
   const s = state.sessions.find(x => x.id === id);
   if (!s) { $("#app").innerHTML = `<div class="empty">找不到這堂課，可能還沒公開。<br><br><button class="btn" onclick="location.hash='home'">回到列表</button></div>`; return }
-  const d = fmtDate(s.date), x = st(id), mine = state.myReact[id], vid = s.yt && ytId(s.yt);
+  const d = fmtDate(s.date), x = st(id), mine = state.myReact[id], yt = isYt(s.yt) ? s.yt : "", vid = yt && ytId(yt);
+  const vids = [...(s.yt && !yt ? [{ url: s.yt }] : []), ...(s.videos || [])], textOnly = !yt && !vids.length && !s.photos.length && !s.docs.length;
   $("#app").innerHTML = `
   <button class="btn ghost back" id="back">← 回到列表</button>
   <div class="dhead"><div class="meta"><span class="chip ${s.cat}">${CATS[s.cat]}</span><span>${d.y} 年 ${d.m} 月 ${d.d} 日（週${d.w}）</span><span>👁 ${x.views} 次點閱</span></div>
   <h1>${esc(s.title)}</h1></div>
-  ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${ytEmbed(s.yt) ? `<div class="yt"><iframe src="${esc(ytEmbed(s.yt))}" title="${esc(s.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="yt-hint">按上面影片中間的 ▶ 就能在這裡直接播放${!ytId(s.yt) && ytList(s.yt) ? "（這是播放清單，會從第一部開始）" : ""}</p>` : ""}<a class="video" id="ytApp" href="${esc(ytAppLink(s.yt, vid))}" ${/^(intent|youtube):/.test(ytAppLink(s.yt, vid)) ? "" : `target="_blank" rel="noopener"`}><span class="play"></span><span><b>用 YouTube App 觀看</b><small>畫面較大，可以調整字幕和速度</small></span></a></section>` : ""}
+  ${yt || vids.length ? `<section><h2 class="sec">課程錄影</h2>${yt ? `${ytEmbed(yt) ? `<div class="yt"><iframe src="${esc(ytEmbed(yt))}" title="${esc(s.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="yt-hint">按上面影片中間的 ▶ 就能在這裡直接播放${!ytId(yt) && ytList(yt) ? "（這是播放清單，會從第一部開始）" : ""}</p>` : ""}<a class="video" id="ytApp" href="${esc(ytAppLink(yt, vid))}" ${/^(intent|youtube):/.test(ytAppLink(yt, vid)) ? "" : `target="_blank" rel="noopener"`}><span class="play"></span><span><b>用 YouTube App 觀看</b><small>畫面較大，可以調整字幕和速度</small></span></a>` : ""}${vids.map(videoBlock).join("")}</section>` : ""}
   ${s.photos.length ? `<section><h2 class="sec">摘要圖</h2><div class="photos">${s.photos.map((p, i) => `<a href="${esc(p)}" target="_blank" rel="noopener" data-img="${esc(imgSrc(p).replace("sz=w1600", "sz=w2400"))}" data-title="摘要圖 ${i + 1}／${s.photos.length}"><img src="${esc(imgSrc(p))}" alt="${esc(s.title)} 摘要圖" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}</div></section>` : ""}
-  ${s.summary ? `<section><h2 class="sec">摘要</h2><div class="summary"><div class="sumtext clamp" id="sum">${esc(s.summary)}</div></div><button class="btn more-btn" id="sumBtn" hidden>▼ 展開全部摘要</button></section>` : ""}
+  ${s.summary ? `<section><h2 class="sec">${textOnly ? "內容" : "摘要"}</h2><div class="summary"><div class="sumtext${textOnly ? "" : " clamp"}" id="sum">${esc(s.summary)}</div></div><button class="btn more-btn" id="sumBtn" hidden>▼ 展開全部摘要</button></section>` : ""}
   ${s.docs.length ? `<section><h2 class="sec">文檔資料</h2><div class="docs">${s.docs.map(docCard).join("")}</div></section>` : ""}
   <section><h2 class="sec">聽完的心情 <span>點一下回饋給老師與同學</span></h2>
     <div class="react">${REACTS.map(r => `<button class="rbtn" data-r="${r.k}" aria-pressed="${mine === r.k}"><span class="e">${r.e}</span>${r.n}<small>${x[r.k] || 0}</small></button>`).join("")}</div></section>
@@ -322,9 +338,9 @@ async function readPdfTitle(file) {
 
 function renderEdit(id) {
   const isNew = id === "new";
-  const src = isNew ? { id: doc(collection(db, "sessions")).id, date: today(), cat: "mon", title: "", titleSrc: "", confirmed: false, yt: "", photos: [], docs: [], summary: "" } : state.sessions.find(s => s.id === id);
+  const src = isNew ? { id: doc(collection(db, "sessions")).id, date: today(), cat: "mon", title: "", titleSrc: "", confirmed: false, yt: "", photos: [], docs: [], videos: [], summary: "" } : state.sessions.find(s => s.id === id);
   if (!src) { location.hash = "admin"; return }
-  const f = JSON.parse(JSON.stringify(src));
+  const f = JSON.parse(JSON.stringify(src)); f.videos ||= [];
   const SRC = { youtube: "來自 YouTube 標題，請確認", pdf: "來自 PDF 檔，請確認", manual: "手動輸入" };
   $("#app").innerHTML = `
   <button class="btn ghost back" id="back">← 回到後台</button>
@@ -334,8 +350,14 @@ function renderEdit(id) {
       <div class="field"><label for="f-date">日期</label><input type="date" id="f-date" value="${f.date}"></div>
       <div class="field"><label for="f-cat">主題</label><select id="f-cat">${Object.entries(CATS).map(([k, n]) => `<option value="${k}" ${f.cat === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
     </div>
-    <div class="field"><label for="f-yt">YouTube 連結</label><div class="row"><input type="url" id="f-yt" value="${esc(f.yt)}" placeholder="https://youtu.be/…"><button class="btn" id="fetchYt">抓取標題</button></div></div>
+    <p class="hint">每一堂課可以只有影片、只有照片、或只有文字，有什麼放什麼就好。</p>
+    <div class="field"><label for="f-yt">YouTube 連結（沒有可留空）</label><div class="row"><input type="url" id="f-yt" value="${esc(f.yt)}" placeholder="https://youtu.be/…"><button class="btn" id="fetchYt">抓取標題</button></div></div>
     <div class="field"><label for="f-title">標題</label><input type="text" id="f-title" value="${esc(f.title)}" placeholder="可由系統抓取，再手動修改"><span class="src" id="srcHint">${f.titleSrc ? SRC[f.titleSrc] : ""}</span></div>
+    <div class="field"><label for="up-vid">其他影片或錄音（不是 YouTube 的）</label>
+      <input type="file" id="up-vid" accept="video/*,audio/*" multiple>
+      <span class="hint">選好影片或錄音檔就會上傳到你的 Google Drive 並設成公開。檔案大的話要等比較久，上傳時請不要關掉畫面。</span>
+      <p class="sort-hint">按住左邊的 ⠿ 上下拖拉，就能調整順序</p><div class="docs" id="vids"></div>
+      <details><summary class="hint">或貼上影片連結（Google Drive、Facebook、Vimeo 等）</summary><div class="row"><input type="text" id="v-name" placeholder="名稱（可留空）"><input type="url" id="v-url" placeholder="影片連結"><button class="btn" type="button" id="addVid">加入</button></div></details></div>
     <div class="field"><label for="up-img">摘要圖</label>
       <input type="file" id="up-img" accept="image/*" multiple>
       <span class="hint">選好圖片就會上傳到你的 Google Drive，並自動設成公開，大家都看得到。</span>
@@ -347,7 +369,7 @@ function renderEdit(id) {
       <p class="sort-hint">按住左邊的 ⠿ 上下拖拉，就能調整順序</p><div class="docs" id="docs"></div>
       <details><summary class="hint">或貼上連結（Google 文件、NotebookLM 等）</summary><div class="row"><input type="text" id="d-name" placeholder="名稱"><input type="url" id="d-url" placeholder="連結"><button class="btn" type="button" id="addDoc">加入</button></div></details></div>
     <p class="who" id="upMsg" hidden></p>
-    <div class="field"><label for="f-sum">摘要文字（可留空）</label><textarea id="f-sum">${esc(f.summary)}</textarea></div>
+    <div class="field"><label for="f-sum">摘要或文字內容（可留空）</label><textarea id="f-sum">${esc(f.summary)}</textarea></div>
     <label class="publish" for="f-ok"><input type="checkbox" id="f-ok" ${f.confirmed ? "checked" : ""}><span><b>公開給大家看</b><small>標題與內容都確認好了，再打勾。沒打勾的話，只有管理者看得到。</small></span></label>
     <div class="row"><button class="btn primary" id="saveBtn">儲存</button>${isNew ? "" : `<button class="btn danger" id="del">刪除這堂課</button>`}<span id="delConfirm"></span></div>
   </div>`;
@@ -374,7 +396,15 @@ function renderEdit(id) {
     sortable("#docs", f.docs, drawDocs);
     document.querySelectorAll("[data-dn]").forEach(inp => inp.oninput = () => { f.docs[+inp.dataset.dn].name = inp.value });
   };
-  drawThumbs(); drawDocs();
+  const drawVids = () => {
+    $("#vids").innerHTML = f.videos.map((o, i) => `<div class="arrange"><span class="handle" aria-label="按住拖拉排序">⠿</span><span class="dthumb k-av small"><span class="ic">▶</span></span>
+      <span class="aname"><span class="kind k-av">${/^audio\//.test(o.mime || "") ? "錄音檔" : "影片"}</span><input type="text" value="${esc(o.name || "")}" data-vn="${i}" aria-label="影片名稱" placeholder="影片名稱"></span>
+      <span class="abtns"><button type="button" class="btn danger" data-rv="${i}">移除</button></span></div>`).join("");
+    document.querySelectorAll("[data-rv]").forEach(b => b.onclick = () => { f.videos.splice(+b.dataset.rv, 1); drawVids() });
+    sortable("#vids", f.videos, drawVids);
+    document.querySelectorAll("[data-vn]").forEach(inp => inp.oninput = () => { f.videos[+inp.dataset.vn].name = inp.value });
+  };
+  drawThumbs(); drawDocs(); drawVids();
   $("#back").onclick = () => { location.hash = "admin" };
   $("#fetchYt").onclick = async () => {
     const u = $("#f-yt").value.trim(); if (!u) return toast("先貼上 YouTube 連結");
@@ -403,11 +433,21 @@ function renderEdit(id) {
     }
     busy("");
   };
+  $("#up-vid").onchange = async e => {
+    const files = [...e.target.files]; e.target.value = "";
+    for (const [i, file] of files.entries()) {
+      busy(`上傳影片 ${i + 1}/${files.length}：${file.name}（${Math.round(file.size / 1048576)} MB），請稍候…`);
+      try { const r = await uploadToDrive(file); f.videos.push({ name: file.name.replace(/\.[^.]+$/, ""), url: r.url, mime: r.mime || file.type }); drawVids() } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
+    }
+    busy("");
+  };
+  $("#addVid").onclick = () => { const n = $("#v-name").value.trim(), u = $("#v-url").value.trim(); if (!u) return toast("請貼上影片連結"); f.videos.push({ name: n, url: u }); $("#v-name").value = ""; $("#v-url").value = ""; drawVids() };
   $("#addPhoto").onclick = () => { const u = $("#p-url").value.trim(); if (!u) return toast("請貼上圖片連結"); f.photos.push(u); $("#p-url").value = ""; drawThumbs() };
   $("#addDoc").onclick = () => { const n = $("#d-name").value.trim(), u = $("#d-url").value.trim(); if (!u) return toast("請貼上文檔連結"); f.docs.push({ name: n || u, url: u }); $("#d-name").value = ""; $("#d-url").value = ""; drawDocs() };
   $("#saveBtn").onclick = async () => {
     f.date = $("#f-date").value; f.cat = $("#f-cat").value; f.yt = $("#f-yt").value.trim(); f.title = $("#f-title").value.trim(); f.summary = $("#f-sum").value; f.confirmed = $("#f-ok").checked;
     if (!f.date || !f.title) return toast("日期和標題要填");
+    if (f.yt && !isYt(f.yt)) { f.videos.unshift({ name: "", url: f.yt }); f.yt = ""; $("#f-yt").value = ""; drawVids() }
     const { id: sid, ...data } = f;
     data.updatedBy = state.user.email; data.updatedAt = serverTimestamp(); if (isNew) data.createdBy = state.user.email;
     $("#saveBtn").disabled = true;
