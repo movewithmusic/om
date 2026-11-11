@@ -332,7 +332,7 @@ async function uploadToDrive(file, onProgress) {
   return { id: f.id, name: f.name, mime: f.mimeType || file.type, url: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view` };
 }
 // ---------- AI 標題建議（Firebase AI Logic + Gemini）----------
-const AI_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"];
+const AI_MODELS = ["gemini-flash-lite-latest", "gemini-3.8-flash", "gemini-flash-latest"];
 const toB64 = blob => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(blob) });
 async function driveBlob(url) {
   const id = driveId(url || ""); if (!id || !hasDrive()) return null;
@@ -363,11 +363,11 @@ ${ctx}`;
   let last;
   for (const name of AI_MODELS) {
     try {
-      const model = getGenerativeModel(ai, { model: name, generationConfig: { responseMimeType: "application/json", responseSchema: Schema.object({ properties: { titles: Schema.array({ items: Schema.string() }) } }) } });
+      const model = getGenerativeModel(ai, { model: name, generationConfig: { responseMimeType: "application/json", responseSchema: Schema.object({ properties: { titles: Schema.array({ items: Schema.string() }) } }) } }, { timeout: 60000 });
       const res = await model.generateContent([prompt, ...media]);
       const t = (JSON.parse(res.response.text()).titles || []).map(x => String(x).replace(/^["「『\s\d.、]+|["」』\s]+$/g, "").trim()).filter(Boolean);
       if (t.length) return [...new Set(t)].slice(0, 5);
-    } catch (e) { last = e; console.warn(name, e); if (!/not.?found|404|unsupported|deprecat/i.test(String(e?.message))) break }
+    } catch (e) { last = e; console.warn(name, e); if (!/not.?found|404|unsupported|deprecat|no longer available|timeout|timed out|abort|fetch|5\d\d/i.test(String(e?.message))) break }
   }
   const m = String(last?.message || "");
   throw new Error(/api.?not.?enabled|has not been used|PERMISSION_DENIED|403|firebasevertexai|firebaseml/i.test(m) ? "AI 功能還沒在 Firebase 開啟（AI Logic），請照說明開啟" : /429|quota|RESOURCE_EXHAUSTED/i.test(m) ? "AI 這段時間用量滿了，請過幾分鐘再試" : "AI 產生標題失敗，請再試一次");
