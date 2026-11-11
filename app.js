@@ -50,15 +50,18 @@ function previewUrl(url) {
   const id = driveId(url);
   return id && /drive\.google\.com/.test(url) ? `https://drive.google.com/file/d/${id}/preview` : "";
 }
-function openViewer(title, url, original) {
+function openViewer(title, url, original, isImage) {
   closeViewer(true);
   const v = document.createElement("div");
   v.className = "viewer"; v.id = "viewer"; v.setAttribute("role", "dialog"); v.setAttribute("aria-label", title);
   v.innerHTML = `<div class="vbar"><button class="btn vclose" id="vclose">✕ 關閉</button><b class="vtitle">${esc(title)}</b></div>
-    <div class="vbody"><div class="vloading">文件載入中，請稍候…</div><iframe src="${esc(url)}" title="${esc(title)}" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
+    <div class="vbody">${isImage
+      ? `<div class="vimg" id="vimg"><img src="${esc(url)}" alt="${esc(title)}" referrerpolicy="no-referrer"></div><button class="btn vzoom" id="vzoom">🔍 放大</button>`
+      : `<div class="vloading">文件載入中，請稍候…</div><iframe src="${esc(url)}" title="${esc(title)}" allow="autoplay; fullscreen" allowfullscreen></iframe>`}</div>
     <div class="vfoot"><a href="${esc(original)}" target="_blank" rel="noopener">看不到內容？點這裡用 Google Drive 開啟</a></div>`;
   document.body.appendChild(v); document.body.classList.add("noscroll");
-  v.querySelector("iframe").onload = () => v.querySelector(".vloading")?.remove();
+  const fr = v.querySelector("iframe"); if (fr) fr.onload = () => v.querySelector(".vloading")?.remove();
+  const zb = $("#vzoom"); if (zb) { const toggle = () => { const z = $("#vimg").classList.toggle("zoom"); zb.textContent = z ? "🔍 縮小" : "🔍 放大" }; zb.onclick = toggle; $("#vimg img").onclick = toggle }
   $("#vclose").onclick = () => history.state?.viewer ? history.back() : closeViewer();
   history.pushState({ viewer: 1 }, "");
 }
@@ -182,7 +185,7 @@ function renderDetail(id) {
   <div class="dhead"><div class="meta"><span class="chip ${s.cat}">${CATS[s.cat]}</span><span>${d.y} 年 ${d.m} 月 ${d.d} 日（週${d.w}）</span><span>👁 ${x.views} 次點閱</span></div>
   <h1>${esc(s.title)}</h1></div>
   ${s.yt ? `<section><h2 class="sec">課程錄影</h2>${ytEmbed(s.yt) ? `<div class="yt"><iframe src="${esc(ytEmbed(s.yt))}" title="${esc(s.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="yt-hint">按上面影片中間的 ▶ 就能在這裡直接播放${!ytId(s.yt) && ytList(s.yt) ? "（這是播放清單，會從第一部開始）" : ""}</p>` : ""}<a class="video" id="ytApp" href="${esc(ytAppLink(s.yt, vid))}" ${/^(intent|youtube):/.test(ytAppLink(s.yt, vid)) ? "" : `target="_blank" rel="noopener"`}><span class="play"></span><span><b>用 YouTube App 觀看</b><small>畫面較大，可以調整字幕和速度</small></span></a></section>` : ""}
-  ${s.photos.length ? `<section><h2 class="sec">摘要圖</h2><div class="photos">${s.photos.map(p => `<a href="${esc(p)}" target="_blank" rel="noopener"><img src="${esc(imgSrc(p))}" alt="${esc(s.title)} 摘要圖" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}</div></section>` : ""}
+  ${s.photos.length ? `<section><h2 class="sec">摘要圖</h2><div class="photos">${s.photos.map((p, i) => `<a href="${esc(p)}" target="_blank" rel="noopener" data-img="${esc(imgSrc(p).replace("sz=w1600", "sz=w2400"))}" data-title="摘要圖 ${i + 1}／${s.photos.length}"><img src="${esc(imgSrc(p))}" alt="${esc(s.title)} 摘要圖" loading="lazy" referrerpolicy="no-referrer"></a>`).join("")}</div></section>` : ""}
   ${s.summary ? `<section><h2 class="sec">摘要</h2><div class="summary"><div class="sumtext clamp" id="sum">${esc(s.summary)}</div></div><button class="btn more-btn" id="sumBtn" hidden>▼ 展開全部摘要</button></section>` : ""}
   ${s.docs.length ? `<section><h2 class="sec">文檔資料</h2><div class="docs">${s.docs.map(docCard).join("")}</div></section>` : ""}
   <section><h2 class="sec">聽完的心情 <span>點一下回饋給老師與同學</span></h2>
@@ -195,6 +198,7 @@ function renderDetail(id) {
     const toggle = () => { const open = sum.classList.toggle("clamp"); sumBtn.textContent = open ? "▼ 展開全部摘要" : "▲ 收起摘要"; };
     sumBtn.onclick = toggle; sum.onclick = () => { if (sum.classList.contains("clamp")) toggle() };
   }
+  document.querySelectorAll("a[data-img]").forEach(el => el.onclick = e => { e.preventDefault(); openViewer(el.dataset.title, el.dataset.img, el.href, true) });
   document.querySelectorAll("a.doc[data-pv]").forEach(el => el.onclick = e => { e.preventDefault(); openViewer(el.dataset.title, el.dataset.pv, el.href) });
   document.querySelectorAll("[data-r]").forEach(b => b.onclick = () => {
     const k = b.dataset.r, prev = state.myReact[id], ch = {};

@@ -221,3 +221,8 @@ body.noscroll{overflow:hidden}
 .vloading{position:absolute;inset:0;display:grid;place-items:center;font-size:18px;color:var(--muted)}
 .vfoot{padding:10px 16px;text-align:center;background:var(--surface);border-top:1px solid var(--line)}
 .vfoot a{color:var(--accent);font-size:15px}
+
+.vimg{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch;background:#1b1712}
+.vimg img{display:block;width:100%;height:auto;margin:0 auto;max-width:none}
+.vimg.zoom img{width:220%}
+.vzoom{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:16px;font-size:18px;font-weight:700;min-height:52px;background:var(--surface);box-shadow:var(--shadow)}
