@@ -296,12 +296,12 @@ function renderEdit(id) {
     <div class="field"><label for="up-img">摘要圖</label>
       <input type="file" id="up-img" accept="image/*" multiple>
       <span class="hint">選好圖片就會上傳到你的 Google Drive，並自動設成公開，大家都看得到。</span>
-      <div class="thumbs" id="thumbs"></div>
+      <p class="sort-hint">按住左邊的 ⠿ 上下拖拉，就能調整順序</p><div class="thumbs" id="thumbs"></div>
       <details><summary class="hint">或貼上已經在 Drive 裡的圖片連結</summary><div class="row"><input type="url" id="p-url" placeholder="Drive 圖片連結"><button class="btn" type="button" id="addPhoto">加入</button></div></details></div>
     <div class="field"><label for="up-doc">文檔資料（PDF 或其他檔案）</label>
       <input type="file" id="up-doc" multiple>
       <span class="hint">上傳 PDF 時，如果還沒有標題，會自動讀出 PDF 的標題。</span>
-      <div class="docs" id="docs"></div>
+      <p class="sort-hint">按住左邊的 ⠿ 上下拖拉，就能調整順序</p><div class="docs" id="docs"></div>
       <details><summary class="hint">或貼上連結（Google 文件、NotebookLM 等）</summary><div class="row"><input type="text" id="d-name" placeholder="名稱"><input type="url" id="d-url" placeholder="連結"><button class="btn" type="button" id="addDoc">加入</button></div></details></div>
     <p class="who" id="upMsg" hidden></p>
     <div class="field"><label for="f-sum">摘要文字（可留空）</label><textarea id="f-sum">${esc(f.summary)}</textarea></div>
@@ -310,19 +310,25 @@ function renderEdit(id) {
   </div>`;
   const setTitle = (t, k) => { if (!t) return; $("#f-title").value = t.trim(); f.titleSrc = k; $("#srcHint").textContent = SRC[k]; $("#f-ok").checked = false };
   $("#f-title").oninput = () => { f.titleSrc = "manual"; $("#srcHint").textContent = SRC.manual };
-  const move = (arr, i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]] };
+  // 按住左邊的 ⠿（或整列）拖拉排序，手機也可以
+  const sortable = (sel, arr, redraw) => {
+    const el = $(sel); if (!window.Sortable || !el) return;
+    if (el._sortable) el._sortable.destroy();
+    el._sortable = Sortable.create(el, { animation: 180, handle: ".handle", ghostClass: "drag-ghost", chosenClass: "drag-chosen", delay: 0,
+      onEnd: e => { if (e.oldIndex === e.newIndex) return; const [it] = arr.splice(e.oldIndex, 1); arr.splice(e.newIndex, 0, it); redraw() } });
+  };
   const drawThumbs = () => {
-    $("#thumbs").innerHTML = f.photos.map((p, i) => `<div class="arrange"><img class="athumb" src="${esc(imgSrc(p))}" alt="摘要圖 ${i + 1}" referrerpolicy="no-referrer"><span class="aname">第 ${i + 1} 張</span>
-      <span class="abtns"><button type="button" class="btn" data-pm="${i},-1" ${i ? "" : "disabled"} aria-label="往上">↑</button><button type="button" class="btn" data-pm="${i},1" ${i < f.photos.length - 1 ? "" : "disabled"} aria-label="往下">↓</button><button type="button" class="btn danger" data-rm="${i}">移除</button></span></div>`).join("");
+    $("#thumbs").innerHTML = f.photos.map((p, i) => `<div class="arrange"><span class="handle" aria-label="按住拖拉排序">⠿</span><img class="athumb" src="${esc(imgSrc(p))}" alt="摘要圖 ${i + 1}" referrerpolicy="no-referrer"><span class="aname">第 ${i + 1} 張</span>
+      <span class="abtns"><button type="button" class="btn danger" data-rm="${i}">移除</button></span></div>`).join("");
     document.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { f.photos.splice(+b.dataset.rm, 1); drawThumbs() });
-    document.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.pm.split(",").map(Number); move(f.photos, i, d); drawThumbs() });
+    sortable("#thumbs", f.photos, drawThumbs);
   };
   const drawDocs = () => {
-    $("#docs").innerHTML = f.docs.map((o, i) => { const k = fileKind(o), th = docThumb(o); return `<div class="arrange"><span class="dthumb ${k.cls} small">${th ? `<img src="${esc(th)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="ic">${k.tag}</span></span>
+    $("#docs").innerHTML = f.docs.map((o, i) => { const k = fileKind(o), th = docThumb(o); return `<div class="arrange"><span class="handle" aria-label="按住拖拉排序">⠿</span><span class="dthumb ${k.cls} small">${th ? `<img src="${esc(th)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="ic">${k.tag}</span></span>
       <span class="aname"><span class="kind ${k.cls}">${k.label}</span><input type="text" value="${esc(o.name)}" data-dn="${i}" aria-label="文檔名稱"></span>
-      <span class="abtns"><button type="button" class="btn" data-dm="${i},-1" ${i ? "" : "disabled"} aria-label="往上">↑</button><button type="button" class="btn" data-dm="${i},1" ${i < f.docs.length - 1 ? "" : "disabled"} aria-label="往下">↓</button><button type="button" class="btn danger" data-rd="${i}">移除</button></span></div>` }).join("");
+      <span class="abtns"><button type="button" class="btn danger" data-rd="${i}">移除</button></span></div>` }).join("");
     document.querySelectorAll("[data-rd]").forEach(b => b.onclick = () => { f.docs.splice(+b.dataset.rd, 1); drawDocs() });
-    document.querySelectorAll("[data-dm]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.dm.split(",").map(Number); move(f.docs, i, d); drawDocs() });
+    sortable("#docs", f.docs, drawDocs);
     document.querySelectorAll("[data-dn]").forEach(inp => inp.oninput = () => { f.docs[+inp.dataset.dn].name = inp.value });
   };
   drawThumbs(); drawDocs();

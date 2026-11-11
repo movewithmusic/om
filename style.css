@@ -198,3 +198,10 @@ a.doc{gap:16px;align-items:center}
 .btn:disabled{opacity:.35;cursor:default}
 #thumbs{display:flex;flex-direction:column;gap:8px}
 .thumbs .athumb{width:72px;height:54px}
+
+/* 拖拉排序 */
+.handle{flex:none;display:grid;place-items:center;width:44px;height:60px;font-size:28px;color:var(--muted);cursor:grab;touch-action:none;border-radius:8px;background:var(--line);user-select:none}
+.handle:active{cursor:grabbing}
+.drag-ghost{opacity:.35}
+.drag-chosen{box-shadow:var(--shadow);border-color:var(--accent)!important;background:var(--accent-soft)!important}
+.sort-hint{font-size:15px;color:var(--muted);margin:4px 0 0}
