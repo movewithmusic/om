@@ -169,7 +169,8 @@ $("#adminBtn").onclick = () => { location.hash = "admin" };
 // ---------- viewer ----------
 function renderHome() {
   const byDate = (x, y) => y.date.localeCompare(x.date);
-  const hot = state.sessions.filter(s => s.confirmed).sort((a, b) => score(b) - score(a)).slice(0, 3).filter(s => score(s) > 0);
+  const hot = topViewed(3);
+  const last = state.sessions.find(x => x.id === local.get("gx.last", "")), rel = last ? related(last, 3) : [];
   const group = k => state.sessions.filter(s => s.cat === k).sort(byDate);
   let listHtml;
   const g = state.filter === "all" ? [...state.sessions].sort(byDate) : group(state.filter);
@@ -178,12 +179,31 @@ function renderHome() {
   <figure class="hero"><picture><source media="(min-width: 700px)" srcset="img/hero-wide.jpg"><img src="img/hero-tall.jpg" alt="共學講堂：佛學、養生、生活智慧" width="1215" height="1295"></picture></figure>
   <section id="topics"><h2 class="sec">選擇主題</h2><div class="tabs" role="group" aria-label="主題">${[["all", "全部"], ...Object.entries(CAT_SHORT)].map(([k, n]) => `<button class="tab" data-f="${k}" aria-pressed="${state.filter === k}">${n}</button>`).join("")}</div></section>
   <section><h2 class="sec">講座列表 <span>${state.filter === "all" ? "全部" : CAT_SHORT[state.filter]}・依日期排列，新的在前</span></h2>${listHtml}</section>
-  ${hot.length ? `<section><h2 class="sec">熱門篇章 <span>依點閱與心情回饋排序</span></h2>
+  ${hot.length ? `<section><h2 class="sec">點閱排行榜 <span>點閱次數最多的前三名</span></h2>
     <div class="hot">${hot.map((s, i) => `<button class="hotcard" data-id="${s.id}"><span class="rank">${i + 1}</span><span><b>${esc(s.title)}</b><small>${CAT_SHORT[s.cat]}・${st(s.id).views} 次點閱</small></span></button>`).join("")}</div>
-  </section>` : ""}`;
+  </section>` : ""}
+  ${rel.length ? `<section><h2 class="sec">相關主題的還有…</h2><p class="relhint">和你剛剛看的「${esc(last.title)}」相關</p>${relList(rel)}</section>` : ""}`;
   document.querySelectorAll("[data-id]").forEach(b => b.onclick = () => openSession(b.dataset.id));
   document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { state.filter = b.dataset.f; renderHome(); $("#topics").scrollIntoView({ block: "start" }) });
 }
+// 點閱排行：依點閱次數，同分再看心情回饋
+function topViewed(n) {
+  const r = x => { const t = st(x.id); return (t.like || 0) + (t.love || 0) + (t.bow || 0) };
+  return state.sessions.filter(s => s.confirmed).sort((a, b) => (st(b.id).views || 0) - (st(a.id).views || 0) || r(b) - r(a) || b.date.localeCompare(a.date)).slice(0, n);
+}
+// 相關主題：同一個主題分類加分，標題和摘要裡有相同的詞再加分
+const grams = t => { const c = (t || "").replace(/[^\p{L}\p{N}]/gu, ""); const g = new Set(); for (let i = 0; i < c.length - 1; i++) g.add(c.slice(i, i + 2)); return g };
+const STOP = new Set(["第一", "第二", "第三", "分享", "課程", "精華", "一講", "二講", "三講", "週一", "週四", "老師", "我們"]);
+function related(s, n) {
+  const mine = grams(s.title + (s.summary || "").slice(0, 200));
+  const day = d => new Date(d + "T00:00").getTime();
+  return state.sessions.filter(x => x.id !== s.id && x.confirmed).map(x => {
+    let k = x.cat === s.cat ? 3 : 0;
+    for (const g of grams(x.title + (x.summary || "").slice(0, 200))) if (mine.has(g) && !STOP.has(g)) k++;
+    return { x, k, gap: Math.abs(day(x.date) - day(s.date)) };
+  }).filter(o => o.k > 0).sort((a, b) => b.k - a.k || a.gap - b.gap).slice(0, n).map(o => o.x);
+}
+const relList = list => `<div class="rel">${list.map(x => { const d = fmtDate(x.date); return `<button class="relcard" data-id="${x.id}"><span class="chip ${x.cat}">${CAT_SHORT[x.cat]}</span><b>${esc(x.title)}</b><small>${d.m} 月 ${d.d} 日・${st(x.id).views || 0} 次點閱</small></button>` }).join("")}</div>`;
 function card(s) {
   const d = fmtDate(s.date), x = st(s.id);
   return `<button class="card" data-id="${s.id}"><div class="date"><div class="m">${d.m} 月</div><div class="d">${d.d}</div><div class="m">週${d.w}</div></div>
@@ -191,12 +211,15 @@ function card(s) {
   <div class="t">${esc(s.title)}</div>
   <div class="meta"><span class="has">${s.yt || s.videos?.length ? `<i class="h-yt">▶ 影片</i>` : ""}${s.photos.length ? `<i class="h-img">摘要圖 ${s.photos.length}</i>` : ""}${s.docs.length ? `<i class="h-doc">文檔 ${s.docs.length}</i>` : ""}</span><span>👁 ${x.views}</span><span>${REACTS.map(r => r.e + " " + (x[r.k] || 0)).join("　")}</span></div></div></button>`;
 }
-function openSession(id) {
-  if (!state.admin) { const seen = local.get("gx.seen", {}); if (!seen[id]) { seen[id] = 1; local.set("gx.seen", seen); bump(id, { views: 1 }) } }
-  location.hash = "s-" + id;
+function openSession(id) { location.hash = "s-" + id; window.scrollTo(0, 0) }
+// 點閱：每台裝置每一堂算一次（從分享連結直接進來也算）
+function countView(id) {
+  if (state.admin) return; const seen = local.get("gx.seen", {});
+  if (!seen[id]) { seen[id] = 1; local.set("gx.seen", seen); bump(id, { views: 1 }) }
 }
 function renderDetail(id) {
   const s = state.sessions.find(x => x.id === id);
+  if (s) { countView(id); local.set("gx.last", id) }
   if (!s) { $("#app").innerHTML = `<div class="empty">找不到這堂課，可能還沒公開。<br><br><button class="btn" onclick="location.hash='home'">回到列表</button></div>`; return }
   const d = fmtDate(s.date), x = st(id), mine = state.myReact[id], yt = isYt(s.yt) ? s.yt : "", vid = yt && ytId(yt);
   const vids = [...(s.yt && !yt ? [{ url: s.yt }] : []), ...(s.videos || [])], textOnly = !yt && !vids.length && !s.photos.length && !s.docs.length;
@@ -210,7 +233,10 @@ function renderDetail(id) {
   ${s.docs.length ? `<section><h2 class="sec">文檔資料</h2><div class="docs">${s.docs.map(docCard).join("")}</div></section>` : ""}
   <section><h2 class="sec">聽完的心情 <span>點一下回饋給老師與同學</span></h2>
     <div class="react">${REACTS.map(r => `<button class="rbtn" data-r="${r.k}" aria-pressed="${mine === r.k}"><span class="e">${r.e}</span>${r.n}<small>${x[r.k] || 0}</small></button>`).join("")}</div></section>
-  <section class="row"><button class="btn" id="share">分享這堂課</button>${state.admin ? `<button class="btn" id="edit">編輯這堂課</button>` : ""}</section>`;
+  <section class="row"><button class="btn" id="share">分享這堂課</button>${state.admin ? `<button class="btn" id="edit">編輯這堂課</button>` : ""}</section>
+  ${(() => { const rel = related(s, 3), top = topViewed(4).filter(x => x.id !== s.id && !rel.includes(x)).slice(0, 3);
+    return (rel.length ? `<section><h2 class="sec">相關主題的還有…</h2>${relList(rel)}</section>` : "") + (top.length ? `<section><h2 class="sec">點閱排行榜</h2>${relList(top)}</section>` : "") })()}`;
+  document.querySelectorAll(".relcard[data-id]").forEach(b => b.onclick = () => openSession(b.dataset.id));
   $("#back").onclick = () => { location.hash = "home" };
   const sum = $("#sum"), sumBtn = $("#sumBtn");
   if (sum && sum.scrollHeight > sum.clientHeight + 4) {

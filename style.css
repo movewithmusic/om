@@ -250,3 +250,10 @@ body.noscroll{overflow:hidden}
 .aiwait{margin:0;font-size:17px;color:var(--gold)}
 .aierr{margin:0;font-size:17px;color:var(--danger)}
 @media (prefers-color-scheme: dark){.ai-btn{background:transparent}.aichip[aria-pressed="true"]{background:transparent}}
+/* 相關主題、排行榜卡片 */
+.rel{display:flex;flex-direction:column;gap:10px}
+.relcard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-height:46px;color:inherit;cursor:pointer}
+.relcard b{font-size:19px;line-height:1.5}
+.relcard small{font-size:15px;color:var(--muted)}
+.relcard:active{background:var(--bg)}
+.relhint{margin:-4px 0 12px;font-size:16px;color:var(--muted)}
