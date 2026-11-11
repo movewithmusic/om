@@ -139,3 +139,11 @@ input[type=text],input[type=url],input[type=date],input[type=password],select,te
 .toast{font-size:17px;padding:12px 20px}
 .empty{font-size:18px}
 @media (max-width:420px){.card{grid-template-columns:60px 1fr;gap:12px;padding:14px}.date .d{font-size:28px}}
+
+.group{display:flex;flex-direction:column;gap:10px}
+.group + .group{margin-top:22px}
+.gtitle{margin:0;display:flex;align-items:center;gap:10px;font-size:18px}
+.gtitle .chip{font-size:18px;padding:4px 14px;font-weight:700}
+.gtitle small{font-size:15px;color:var(--muted);font-weight:400}
+.btn.more{align-self:flex-start;color:var(--accent);border-color:var(--accent)}
+#topics{scroll-margin-top:90px}

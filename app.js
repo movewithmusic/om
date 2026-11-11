@@ -89,19 +89,30 @@ $("#adminBtn").onclick = () => { location.hash = "admin" };
 
 // ---------- viewer ----------
 function renderHome() {
-  const list = state.sessions.filter(s => state.filter === "all" || s.cat === state.filter).sort((a, b) => b.date.localeCompare(a.date));
+  const byDate = (x, y) => y.date.localeCompare(x.date);
   const hot = state.sessions.filter(s => s.confirmed).sort((a, b) => score(b) - score(a)).slice(0, 3).filter(s => score(s) > 0);
+  const group = k => state.sessions.filter(s => s.cat === k).sort(byDate);
+  let listHtml;
+  if (state.filter === "all") {
+    listHtml = Object.entries(CAT_SHORT).map(([k, n]) => {
+      const g = group(k); if (!g.length) return "";
+      return `<div class="group"><h3 class="gtitle"><span class="chip ${k}">${n}</span><small>${g.length} 堂</small></h3>
+        <div class="list">${g.slice(0, 3).map(card).join("")}</div>
+        ${g.length > 3 ? `<button class="btn more" data-f="${k}">看「${n}」全部 ${g.length} 堂</button>` : ""}</div>`;
+    }).join("") || `<div class="empty">還沒有講座</div>`;
+  } else {
+    const g = group(state.filter);
+    listHtml = `<div class="list">${g.map(card).join("") || `<div class="empty">這個主題還沒有內容</div>`}</div>`;
+  }
   $("#app").innerHTML = `
   <figure class="hero"><picture><source media="(min-width: 700px)" srcset="img/hero-wide.jpg"><img src="img/hero-tall.jpg" alt="共學講堂：佛學、養生、生活智慧" width="1215" height="1295"></picture></figure>
+  <section id="topics"><h2 class="sec">選擇主題</h2><div class="tabs" role="group" aria-label="主題">${[["all", "全部"], ...Object.entries(CAT_SHORT)].map(([k, n]) => `<button class="tab" data-f="${k}" aria-pressed="${state.filter === k}">${n}</button>`).join("")}</div></section>
+  <section><h2 class="sec">講座列表 <span>${state.filter === "all" ? "依主題分類，新的在前" : CAT_SHORT[state.filter]}</span></h2>${listHtml}</section>
   ${hot.length ? `<section><h2 class="sec">熱門篇章 <span>依點閱與心情回饋排序</span></h2>
     <div class="hot">${hot.map((s, i) => `<button class="hotcard" data-id="${s.id}"><span class="rank">${i + 1}</span><span><b>${esc(s.title)}</b><small>${CAT_SHORT[s.cat]}・${st(s.id).views} 次點閱</small></span></button>`).join("")}</div>
-  </section>` : ""}
-  <section><div class="tabs" role="group" aria-label="主題">${[["all", "全部"], ...Object.entries(CAT_SHORT)].map(([k, n]) => `<button class="tab" data-f="${k}" aria-pressed="${state.filter === k}">${n}</button>`).join("")}</div></section>
-  <section><h2 class="sec">講座列表 <span>${list.length} 堂</span></h2>
-    <div class="list">${list.map(card).join("") || `<div class="empty">這個主題還沒有內容</div>`}</div>
-  </section>`;
+  </section>` : ""}`;
   document.querySelectorAll("[data-id]").forEach(b => b.onclick = () => openSession(b.dataset.id));
-  document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { state.filter = b.dataset.f; renderHome() });
+  document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { state.filter = b.dataset.f; renderHome(); $("#topics").scrollIntoView({ block: "start" }) });
 }
 function card(s) {
   const d = fmtDate(s.date), x = st(s.id);
