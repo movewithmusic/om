@@ -43,9 +43,30 @@ function fileKind(o) {
   return { tag: "↗", label: "網頁連結", cls: "k-link", thumb: false };
 }
 const docThumb = o => { const id = driveId(o.url || ""); return id && fileKind(o).thumb ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : "" };
+// 可以在 app 裡直接閱讀的網址（Google Drive 檔案、Google 文件／簡報／試算表）
+function previewUrl(url) {
+  const g = url.match(/docs\.google\.com\/(document|presentation|spreadsheets)\/d\/([\w-]+)/);
+  if (g) return `https://docs.google.com/${g[1]}/d/${g[2]}/preview`;
+  const id = driveId(url);
+  return id && /drive\.google\.com/.test(url) ? `https://drive.google.com/file/d/${id}/preview` : "";
+}
+function openViewer(title, url, original) {
+  closeViewer(true);
+  const v = document.createElement("div");
+  v.className = "viewer"; v.id = "viewer"; v.setAttribute("role", "dialog"); v.setAttribute("aria-label", title);
+  v.innerHTML = `<div class="vbar"><button class="btn vclose" id="vclose">✕ 關閉</button><b class="vtitle">${esc(title)}</b></div>
+    <div class="vbody"><div class="vloading">文件載入中，請稍候…</div><iframe src="${esc(url)}" title="${esc(title)}" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
+    <div class="vfoot"><a href="${esc(original)}" target="_blank" rel="noopener">看不到內容？點這裡用 Google Drive 開啟</a></div>`;
+  document.body.appendChild(v); document.body.classList.add("noscroll");
+  v.querySelector("iframe").onload = () => v.querySelector(".vloading")?.remove();
+  $("#vclose").onclick = () => history.state?.viewer ? history.back() : closeViewer();
+  history.pushState({ viewer: 1 }, "");
+}
+function closeViewer(silent) { const v = $("#viewer"); if (v) { v.remove(); document.body.classList.remove("noscroll") } }
+window.addEventListener("popstate", () => closeViewer());
 function docCard(o) {
-  const k = fileKind(o), th = docThumb(o);
-  return `<a class="doc" href="${esc(o.url)}" target="_blank" rel="noopener">
+  const k = fileKind(o), th = docThumb(o), pv = previewUrl(o.url || "");
+  return `<a class="doc" href="${esc(o.url)}" target="_blank" rel="noopener" ${pv ? `data-pv="${esc(pv)}" data-title="${esc(o.name)}"` : ""}>
     <span class="dthumb ${k.cls}">${th ? `<img src="${esc(th)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="ic">${k.tag}</span></span>
     <span class="dtext"><span class="kind ${k.cls}">${k.label}</span><span class="dname">${esc(o.name)}</span></span></a>`;
 }
@@ -118,7 +139,7 @@ function route() {
   if (h.startsWith("edit-") && state.admin) return renderEdit(h.slice(5));
   renderHome();
 }
-window.addEventListener("hashchange", () => { route(); window.scrollTo(0, 0) });
+window.addEventListener("hashchange", () => { closeViewer(); route(); window.scrollTo(0, 0) });
 $("#brand").onclick = () => { location.hash = "home" };
 $("#brand").onkeydown = e => { if (e.key === "Enter") location.hash = "home" };
 $("#adminBtn").onclick = () => { location.hash = "admin" };
@@ -174,6 +195,7 @@ function renderDetail(id) {
     const toggle = () => { const open = sum.classList.toggle("clamp"); sumBtn.textContent = open ? "▼ 展開全部摘要" : "▲ 收起摘要"; };
     sumBtn.onclick = toggle; sum.onclick = () => { if (sum.classList.contains("clamp")) toggle() };
   }
+  document.querySelectorAll("a.doc[data-pv]").forEach(el => el.onclick = e => { e.preventDefault(); openViewer(el.dataset.title, el.dataset.pv, el.href) });
   document.querySelectorAll("[data-r]").forEach(b => b.onclick = () => {
     const k = b.dataset.r, prev = state.myReact[id], ch = {};
     if (prev) ch[prev] = -1;
