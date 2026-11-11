@@ -7,8 +7,8 @@ const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
 const db = getFirestore(fb);
 
-const CATS = { mon: "週一晚上課", cc: "週四社區大學課精華分享", nk: "週四寧光堂精華" };
-const CAT_SHORT = { mon: "週一晚上課", cc: "週四社大精華", nk: "週四寧光堂精華" };
+const CATS = { mon: "週一晚上課", cc: "社大課程分享", nk: "週四寧光堂精華", other: "其他" };
+const CAT_SHORT = { mon: "週一晚上課", cc: "社大課程分享", nk: "週四寧光堂精華", other: "其他" };
 const REACTS = [{ k: "like", e: "👍", n: "讚" }, { k: "love", e: "❤️", n: "愛心" }, { k: "bow", e: "🙏", n: "頂禮" }];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

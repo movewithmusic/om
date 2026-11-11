@@ -16,5 +16,5 @@ Master Fu's classroom
 3. Firebase Authentication → 設定 → 授權網域，加入 `<帳號>.github.io`。
 
 ## 資料
-- `sessions/{id}`：date, cat (mon|cc|nk), title, titleSrc, confirmed, yt, photos[], docs[{name,url}], summary
+- `sessions/{id}`：date, cat (mon|cc|nk|other), title, titleSrc, confirmed, yt, photos[], docs[{name,url}], summary
 - `stats/{id}`：views, like, love, bow（任何人可 ±1）
