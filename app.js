@@ -129,12 +129,16 @@ async function readAdminDoc(user) {
   if (!user) return null;
   try { const d = await getDoc(doc(db, "admins", user.uid)); return d.exists() ? d.data() : null } catch { return null }
 }
+// Google Drive 授權（約 1 小時有效），記在這個分頁裡，重新整理後不用再授權
+try { state.drive = JSON.parse(sessionStorage.getItem("gx.drive")) } catch { }
+function saveDrive(v) { state.drive = v; try { v ? sessionStorage.setItem("gx.drive", JSON.stringify(v)) : sessionStorage.removeItem("gx.drive") } catch { } }
+const hasDrive = () => !!state.drive && Date.now() - state.drive.at < 50 * 60 * 1000;
 function keepToken(result) {
   const cred = GoogleAuthProvider.credentialFromResult(result);
-  if (cred?.accessToken) state.drive = { token: cred.accessToken, at: Date.now() };
+  if (cred?.accessToken) saveDrive({ token: cred.accessToken, at: Date.now() });
 }
 async function driveToken() {
-  if (state.drive && Date.now() - state.drive.at < 50 * 60 * 1000) return state.drive.token;
+  if (hasDrive()) return state.drive.token;
   const r = await reauthenticateWithPopup(auth.currentUser, provider()); keepToken(r);
   if (!state.drive) throw new Error("沒有取得 Google Drive 權限");
   return state.drive.token;
@@ -282,7 +286,7 @@ function renderAdmin() {
   <div class="stats"><div class="stat"><b>${all.length}</b><small>堂課</small></div><div class="stat"><b>${pending}</b><small>標題待確認</small></div><div class="stat"><b>${views}</b><small>總點閱</small></div></div>
   <div class="panel atable">${all.map(s => `<div class="arow"><span class="dd">${s.date}</span><span class="tt"><span class="chip ${s.cat}">${CAT_SHORT[s.cat]}</span> ${esc(s.title)} ${s.confirmed ? "" : `<span class="chip pending">待確認</span>`}</span><button class="btn" data-e="${s.id}">編輯</button></div>`).join("") || `<div class="empty">還沒有課程，按「新增一堂」開始。</div>`}</div>`;
   $("#new").onclick = () => { location.hash = "edit-new" };
-  $("#logout").onclick = () => { setUnlocked(false); state.admin = false; state.drive = null; location.hash = "home" };
+  $("#logout").onclick = () => { setUnlocked(false); state.admin = false; saveDrive(null); location.hash = "home" };
   document.querySelectorAll("[data-e]").forEach(b => b.onclick = () => { location.hash = "edit-" + b.dataset.e });
 }
 async function ytTitle(url) {
@@ -295,7 +299,7 @@ async function ytTitle(url) {
 async function gapi(url, opt = {}) {
   const token = await driveToken();
   const r = await fetch(url, { ...opt, headers: { Authorization: `Bearer ${token}`, ...(opt.headers || {}) } });
-  if (r.status === 401) { state.drive = null; throw new Error("Google 授權過期，請再按一次上傳") }
+  if (r.status === 401) { saveDrive(null); throw new Error("Google 授權過期，請再按一次上傳") }
   if (!r.ok) throw new Error(`Google Drive 回應 ${r.status}`);
   return r;
 }
@@ -416,35 +420,36 @@ function renderEdit(id) {
   };
   $("#f-yt").onchange = async () => { const u = $("#f-yt").value.trim(); if (u && !$("#f-title").value.trim()) { const t = await ytTitle(u); if (t) setTitle(t, "youtube") } };
   const busy = (msg) => { const m = $("#upMsg"); m.hidden = !msg; m.textContent = msg || ""; $("#saveBtn").disabled = !!msg };
-  $("#up-img").onchange = async e => {
-    const files = [...e.target.files]; e.target.value = "";
-    for (const [i, file] of files.entries()) {
-      busy(`上傳圖片 ${i + 1}/${files.length}：${file.name}…`);
-      try { const r = await uploadToDrive(file); f.photos.push(r.url); drawThumbs() } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
+  // 瀏覽器只允許「按按鈕」時跳出 Google 授權視窗，所以授權過期時先請管理者按一下按鈕
+  const askDrive = run => {
+    const m = $("#upMsg"); m.hidden = false;
+    m.innerHTML = `<b class="needdrive">要先連接你的 Google Drive，才能上傳檔案。</b><button class="btn primary big" id="connDrive" type="button">按這裡連接 Google Drive</button>`;
+    $("#connDrive").onclick = async () => {
+      try { await driveToken(); run() }
+      catch (err) { console.error(err); toast(/popup-blocked/.test(err.code || "") ? "瀏覽器擋住了 Google 視窗，請再按一次" : "沒有完成 Google 授權，請再按一次") }
+    };
+  };
+  const uploadAll = async (files, label, onFile) => {
+    for (let i = 0; i < files.length; i++) {
+      if (!hasDrive()) { busy(""); return askDrive(() => uploadAll(files.slice(i), label, onFile)) }
+      busy(label(files[i], i, files.length));
+      try { await onFile(files[i]) } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
     }
     busy("");
   };
-  $("#up-doc").onchange = async e => {
-    const files = [...e.target.files]; e.target.value = "";
-    for (const [i, file] of files.entries()) {
-      busy(`上傳文檔 ${i + 1}/${files.length}：${file.name}…`);
-      let name = file.name.replace(/\.[^.]+$/, "");
-      if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
-        const t = await readPdfTitle(file); name = t;
-        if (!$("#f-title").value.trim()) setTitle(t, "pdf");
-      } else fillTitle(fromName(file.name), "file");
-      try { const r = await uploadToDrive(file); f.docs.push({ name, url: r.url, mime: r.mime || file.type, file: file.name }); drawDocs() } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
-    }
-    busy("");
-  };
-  $("#up-vid").onchange = async e => {
-    const files = [...e.target.files]; e.target.value = "";
-    for (const [i, file] of files.entries()) {
-      busy(`上傳影片 ${i + 1}/${files.length}：${file.name}（${Math.round(file.size / 1048576)} MB），請稍候…`);
-      try { const r = await uploadToDrive(file); f.videos.push({ name: file.name.replace(/\.[^.]+$/, ""), url: r.url, mime: r.mime || file.type }); drawVids(); fillTitle(fromName(file.name), "file") } catch (err) { console.error(err); toast(err.message || "上傳失敗") }
-    }
-    busy("");
-  };
+  const picked = e => { const files = [...e.target.files]; e.target.value = ""; return files };
+  $("#up-img").onchange = e => uploadAll(picked(e), (f, i, n) => `上傳圖片 ${i + 1}/${n}：${f.name}…`,
+    async file => { const r = await uploadToDrive(file); f.photos.push(r.url); drawThumbs() });
+  $("#up-doc").onchange = e => uploadAll(picked(e), (f, i, n) => `上傳文檔 ${i + 1}/${n}：${f.name}…`, async file => {
+    let name = file.name.replace(/\.[^.]+$/, "");
+    if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
+      const t = await readPdfTitle(file); name = t;
+      if (!$("#f-title").value.trim()) setTitle(t, "pdf");
+    } else fillTitle(fromName(file.name), "file");
+    const r = await uploadToDrive(file); f.docs.push({ name, url: r.url, mime: r.mime || file.type, file: file.name }); drawDocs();
+  });
+  $("#up-vid").onchange = e => uploadAll(picked(e), (f, i, n) => `上傳影片 ${i + 1}/${n}：${f.name}（${Math.round(f.size / 1048576)} MB），請稍候…`,
+    async file => { const r = await uploadToDrive(file); f.videos.push({ name: file.name.replace(/\.[^.]+$/, ""), url: r.url, mime: r.mime || file.type }); drawVids(); fillTitle(fromName(file.name), "file") });
   $("#addVid").onclick = () => { const n = $("#v-name").value.trim(), u = $("#v-url").value.trim(); if (!u) return toast("請貼上影片連結"); f.videos.push({ name: n, url: u }); if (n) fillTitle(n, "file"); $("#v-name").value = ""; $("#v-url").value = ""; drawVids() };
   $("#f-sum").onchange = () => fillTitle(fromText($("#f-sum").value), "text");
   $("#addPhoto").onclick = () => { const u = $("#p-url").value.trim(); if (!u) return toast("請貼上圖片連結"); f.photos.push(u); $("#p-url").value = ""; drawThumbs() };

@@ -235,3 +235,5 @@ body.noscroll{overflow:hidden}
 .vfile{width:100%;max-height:70vh;border-radius:12px;background:#000}
 .afile{width:100%}
 .yt-hint + .video + .vitem,.video + .vitem{margin-top:18px}
+#upMsg .needdrive{display:block;font-size:19px;color:var(--ink);margin-bottom:10px}
+#upMsg #connDrive{width:100%}
