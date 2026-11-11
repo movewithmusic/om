@@ -222,7 +222,7 @@ function renderLogin() {
     const isLine = /\bLine\//i.test(navigator.userAgent);
     $("#app").innerHTML = `<div class="panel"><h2 class="sec">請用手機瀏覽器開啟</h2>
     <p class="inapp">你現在是在 ${isLine ? "LINE" : "App"} 裡面看這個網頁。這裡沒辦法完成 Google 登入，所以進後台要改用手機的瀏覽器（Safari 或 Chrome）。</p>
-    ${isLine ? `<a class="btn primary big" href="${esc(u.href)}">用手機瀏覽器開啟</a>` : `<p class="inapp">請點右上角「⋯」，選「用瀏覽器開啟」。</p>`}
+    ${isLine ? `<a class="btn primary big" href="${esc(u.href)}">用手機瀏覽器開啟</a><p class="inapp">如果按了沒有反應：點畫面右下角（或右上角）的「⋯」或分享圖示，選「以預設瀏覽器開啟」。</p>` : `<p class="inapp">請點右上角「⋯」，選「用瀏覽器開啟」。</p>`}
     <button class="btn ghost" id="cancel" type="button">回到首頁</button></div>`;
     $("#cancel").onclick = () => { location.hash = "home" };
     return;
