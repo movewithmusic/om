@@ -454,7 +454,7 @@ function renderEdit(id) {
     if (!f.title) {
       const d = f.date ? fmtDate(f.date) : null;
       f.title = fromText(f.summary) || fromName(f.docs[0]?.name) || fromName(f.videos[0]?.name) || (d ? `${CAT_SHORT[f.cat]}・${d.m} 月 ${d.d} 日` : "");
-      f.titleSrc = "auto"; $("#f-title").value = f.title; $("#srcHint").textContent = SRC.auto;
+      f.titleSrc = "auto"; $("#f-title").value = f.title; $("#srcHint").textContent = SRC.auto; f.confirmed = false; $("#f-ok").checked = false;
     }
     if (!f.date || !f.title) return toast("請填日期");
     if (f.yt && !isYt(f.yt)) { f.videos.unshift({ name: "", url: f.yt }); f.yt = ""; $("#f-yt").value = ""; drawVids() }
