@@ -92,6 +92,7 @@ function renderHome() {
   const list = state.sessions.filter(s => state.filter === "all" || s.cat === state.filter).sort((a, b) => b.date.localeCompare(a.date));
   const hot = state.sessions.filter(s => s.confirmed).sort((a, b) => score(b) - score(a)).slice(0, 3).filter(s => score(s) > 0);
   $("#app").innerHTML = `
+  <figure class="hero"><picture><source media="(min-width: 700px)" srcset="img/hero-wide.jpg"><img src="img/hero-tall.jpg" alt="共學講堂：佛學、養生、生活智慧" width="1215" height="1295"></picture></figure>
   ${hot.length ? `<section><h2 class="sec">熱門篇章 <span>依點閱與心情回饋排序</span></h2>
     <div class="hot">${hot.map((s, i) => `<button class="hotcard" data-id="${s.id}"><span class="rank">${i + 1}</span><span><b>${esc(s.title)}</b><small>${CAT_SHORT[s.cat]}・${st(s.id).views} 次點閱</small></span></button>`).join("")}</div>
   </section>` : ""}

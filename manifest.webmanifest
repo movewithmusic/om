@@ -1,1 +1,1 @@
-{"name":"共學講堂","short_name":"共學講堂","start_url":"./","display":"standalone","background_color":"#F2F4F1","theme_color":"#1F6B66","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml"}]}
+{"name":"共學講堂","short_name":"共學講堂","start_url":"./","display":"standalone","background_color":"#F6F0E4","theme_color":"#A8772E","icons":[{"src":"img/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"img/icon-512.png","sizes":"512x512","type":"image/png"}]}
