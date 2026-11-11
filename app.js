@@ -216,6 +216,17 @@ function renderDetail(id) {
 
 // ---------- admin ----------
 function renderLogin() {
+  // LINE、Facebook 等 App 裡的內建瀏覽器不能完成 Google 登入，請改用手機瀏覽器開啟
+  if (/\bLine\/|FBAN|FBAV|Instagram/i.test(navigator.userAgent)) {
+    const u = new URL(location.href); u.searchParams.set("openExternalBrowser", "1"); u.hash = "admin";
+    const isLine = /\bLine\//i.test(navigator.userAgent);
+    $("#app").innerHTML = `<div class="panel"><h2 class="sec">請用手機瀏覽器開啟</h2>
+    <p class="inapp">你現在是在 ${isLine ? "LINE" : "App"} 裡面看這個網頁。這裡沒辦法完成 Google 登入，所以進後台要改用手機的瀏覽器（Safari 或 Chrome）。</p>
+    ${isLine ? `<a class="btn primary big" href="${esc(u.href)}">用手機瀏覽器開啟</a>` : `<p class="inapp">請點右上角「⋯」，選「用瀏覽器開啟」。</p>`}
+    <button class="btn ghost" id="cancel" type="button">回到首頁</button></div>`;
+    $("#cancel").onclick = () => { location.hash = "home" };
+    return;
+  }
   $("#app").innerHTML = `<form class="panel" id="lf"><h2 class="sec">管理者登入</h2>
   <div class="field"><label for="code">管理密碼</label><input type="password" id="code" inputmode="numeric" autocomplete="off"></div>
   <p class="who" id="lmsg">${state.adminDoc ? `已綁定的 Google 帳號：${esc(state.user.email)}` : "第一次登入時，輸入密碼後會請你選一個 Google 帳號綁定。之後你上傳的檔案，會存到這個帳號的 Google Drive。"}</p>

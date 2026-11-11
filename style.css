@@ -226,3 +226,6 @@ body.noscroll{overflow:hidden}
 .vimg img{display:block;width:100%;height:auto;margin:0 auto;max-width:none}
 .vimg.zoom img{width:220%}
 .vzoom{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:16px;font-size:18px;font-weight:700;min-height:52px;background:var(--surface);box-shadow:var(--shadow)}
+
+.inapp{font-size:19px;line-height:1.7}
+.btn.big{font-size:21px;padding:16px;text-align:center;text-decoration:none}
