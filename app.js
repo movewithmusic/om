@@ -355,8 +355,9 @@ function renderEdit(id) {
     data.updatedBy = state.user.email; data.updatedAt = serverTimestamp(); if (isNew) data.createdBy = state.user.email;
     $("#saveBtn").disabled = true;
     // 舊資料補上檔案類型（需要已連上 Google Drive）
-    if (state.drive && Date.now() - state.drive.at < 50 * 60 * 1000) {
-      for (const o of f.docs) {
+    if (f.docs.some(o => !o.mime && driveId(o.url || ""))) {
+      try { await driveToken() } catch { }
+      if (state.drive) for (const o of f.docs) {
         const id = driveId(o.url || ""); if (o.mime || !id) continue;
         try { const r = await gapi(`https://www.googleapis.com/drive/v3/files/${id}?fields=mimeType,name`); const j = await r.json(); o.mime = j.mimeType; o.file = j.name } catch { }
       }
