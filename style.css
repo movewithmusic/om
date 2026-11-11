@@ -207,5 +207,5 @@ a.doc{gap:16px;align-items:center}
 .sort-hint{font-size:15px;color:var(--muted);margin:4px 0 0}
 
 /* 摘要：先顯示 2 行，點了展開 */
-.summary.clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;cursor:pointer}
+.sumtext.clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;cursor:pointer}
 .more-btn{margin-top:10px;color:var(--accent);border:2px solid var(--accent);font-weight:700}
