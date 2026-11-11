@@ -269,7 +269,7 @@ function renderEdit(id) {
       <details><summary class="hint">或貼上連結（Google 文件、NotebookLM 等）</summary><div class="row"><input type="text" id="d-name" placeholder="名稱"><input type="url" id="d-url" placeholder="連結"><button class="btn" type="button" id="addDoc">加入</button></div></details></div>
     <p class="who" id="upMsg" hidden></p>
     <div class="field"><label for="f-sum">摘要文字（可留空）</label><textarea id="f-sum">${esc(f.summary)}</textarea></div>
-    <label class="row" style="font-size:14px"><input type="checkbox" id="f-ok" ${f.confirmed ? "checked" : ""}> 標題與內容已確認，公開給大家看</label>
+    <label class="publish" for="f-ok"><input type="checkbox" id="f-ok" ${f.confirmed ? "checked" : ""}><span><b>公開給大家看</b><small>標題與內容都確認好了，再打勾。沒打勾的話，只有管理者看得到。</small></span></label>
     <div class="row"><button class="btn primary" id="saveBtn">儲存</button>${isNew ? "" : `<button class="btn danger" id="del">刪除這堂課</button>`}<span id="delConfirm"></span></div>
   </div>`;
   const setTitle = (t, k) => { if (!t) return; $("#f-title").value = t.trim(); f.titleSrc = k; $("#srcHint").textContent = SRC[k]; $("#f-ok").checked = false };

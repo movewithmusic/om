@@ -164,3 +164,11 @@ a.doc:hover{background:var(--accent-soft)}
 .doc .ic{background:var(--accent);color:var(--surface);width:46px;height:52px;font-size:14px}
 a.doc::after{content:"開啟 ›";margin-left:auto;font-size:17px;white-space:nowrap}
 .yt + .video{margin-top:12px}
+
+/* 公開打勾：大、清楚 */
+.publish{display:flex;align-items:center;gap:16px;padding:16px 18px;border:2px solid var(--gold);border-radius:12px;background:var(--gold-soft);cursor:pointer}
+.publish input{width:30px;height:30px;flex:none;accent-color:var(--accent);margin:0}
+.publish b{display:block;font-size:20px;color:var(--ink)}
+.publish small{display:block;font-size:15px;color:var(--muted);line-height:1.5}
+.publish:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+#f-sum{min-height:160px}
